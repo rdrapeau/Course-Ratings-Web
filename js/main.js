@@ -178,6 +178,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
 
         return (
             React.createElement("div", {id: "app"}, 
+                "Testing App.", 
                 React.createElement("div", {className: "loading"}
                 ), 
 
