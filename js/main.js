@@ -243,6 +243,7 @@ var CourseDetailComponent = React.createClass({displayName: "CourseDetailCompone
 
         if (courses.length > 0) {
             this.setState({current_course_name : courses[0].course_title});
+            this.setState({current_course_description : courses[0].course_description});
         }
 
         return courses;
@@ -267,6 +268,9 @@ var CourseDetailComponent = React.createClass({displayName: "CourseDetailCompone
         return (
             React.createElement("div", {className: "table-container"}, 
                 React.createElement("h2", null, React.createElement("span", {className: "courseDetailName"}, this.props.course + (this.state.current_course_name ? ': ' + this.state.current_course_name : '')), React.createElement("span", {className: "courseDetailScore"}, "Score: ", React.createElement("span", {className: "scoreRating" + rating}, runningSum))), 
+                this.state.current_course_description != 0 &&
+                    React.createElement("p", {className: "course-description"}, this.state.current_course_description), 
+                
                 React.createElement(OverviewComponent, {onClickCourse: this.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.current_courses, headers: headers})
             )
         );
@@ -503,6 +507,7 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
         return (
 	        React.createElement("table", {className: "table table-curved"}, 
 	        	React.createElement(OverviewHeaderComponent, {ref: "headerComp", headers: this.props.headers, onClickHeader: this.sortData}), 
+
 	        	this.state.current_courses && this.state.current_courses.map(function(course) {
 	        		return (
                         React.createElement(OverviewCourseRowComponent, {headers: self.props.headers, onClickCourse: self.props.onClickCourse, onClickInstructor: self.props.onClickInstructor, data: course})
