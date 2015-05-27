@@ -548,7 +548,7 @@ var OverviewCourseRowComponent = React.createClass({displayName: "OverviewCourse
         return (
             React.createElement("tr", null, 
                 this.props.headers.indexOf('Course Code') != -1 &&
-                    React.createElement("td", {className: "course-code", onClick: this.onClickCourse}, data.course_whole_code), 
+                    React.createElement("td", {className: "course-code", onClick: this.onClickCourse}, data.course_whole_code, React.createElement("span", {className: "course_time"}, ' (' + data.time + ')')), 
                 
                 this.props.headers.indexOf('Instructor') != -1 &&
                     React.createElement("td", {className: "prof-name", onClick: this.onClickInstructor}, data.professor), 
