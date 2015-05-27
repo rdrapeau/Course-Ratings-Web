@@ -503,7 +503,6 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
         return (
 	        React.createElement("table", {className: "table table-curved"}, 
 	        	React.createElement(OverviewHeaderComponent, {ref: "headerComp", headers: this.props.headers, onClickHeader: this.sortData}), 
-
 	        	this.state.current_courses && this.state.current_courses.map(function(course) {
 	        		return (
                         React.createElement(OverviewCourseRowComponent, {headers: self.props.headers, onClickCourse: self.props.onClickCourse, onClickInstructor: self.props.onClickInstructor, data: course})
@@ -724,7 +723,7 @@ process.nextTick = function (fun) {
         }
     }
     queue.push(new Item(fun, args));
-    if (!draining) {
+    if (queue.length === 1 && !draining) {
         setTimeout(drainQueue, 0);
     }
 };
