@@ -18,7 +18,8 @@ var Constants = (function () {
     }
     Constants.SCREENS = {
         OVERVIEW: 0,
-        COURSE_DETAILS: 1
+        COURSE_DETAILS: 1,
+        INSTRUCTOR_DETAILS: 2
     };
     Constants.OVERVIEW_HEADERS = [
         "Course Code",
@@ -68,6 +69,10 @@ var DataAPI = (function () {
                 var course = { 'course_whole_code': line[0] + line[1] };
                 var percentEnrolled = Math.round(1000.0 * Number(line[header.indexOf('completed')]) / Number(line[header.indexOf('total_enrolled')])) / 10;
                 course['percent_enrolled'] = Math.min(percentEnrolled, 100);
+                var time = line[header.indexOf('time')];
+                var quarter = time.substring(0, 2);
+                var year = time.substring(2);
+                course['datetime'] = year + DataAPI.TIME_TO_DATETIME[quarter];
                 for (var j = 0; j < line.length; j++) {
                     if (!isNaN(line[j])) {
                         course[header[j]] = Number(line[j]);
@@ -87,6 +92,12 @@ var DataAPI = (function () {
         });
     };
     DataAPI.PAYLOAD_URL = 'courses/data.csv';
+    DataAPI.TIME_TO_DATETIME = {
+        "wi": 0,
+        "sp": 1,
+        "su": 2,
+        "au": 3
+    };
     return DataAPI;
 })();
 module.exports = DataAPI;
@@ -160,12 +171,36 @@ var AppComponent = React.createClass({displayName: "AppComponent",
                 [
                     {'professor' : {likenocase: searchValue}},
                     {'course_whole_code' : {likenocase: searchValue.replace(' ', '')}}
-                ]).order('course_whole_code,professor,time').limit(Constants.SEARCH_RESULT_LIMIT).get();
+                ]).order('course_whole_code,professor,datetime').limit(Constants.SEARCH_RESULT_LIMIT).get();
         }
 
         this.refs.overviewComponent.sortData('Course Code', null);
         this.setState({current_courses : new_courses});
-        this.setScreenLater(Constants.SCREENS.OVERVIEW)();
+
+        // Skip to the course page or instructor page if it is a unique result
+        var differentProfessors = false;
+        var differentCourses = false;
+        for (var i = 1; i < new_courses.length; i++) {
+            if (new_courses[i].course_whole_code !== new_courses[i - 1].course_whole_code) {
+                differentCourses = true;
+            }
+
+            if (new_courses[i].professor !== new_courses[i - 1].professor) {
+                differentProfessors = true;
+            }
+
+            if (differentCourses && differentProfessors) {
+                break; // Break early
+            }
+        }
+
+        if (new_courses.length == 0 || (differentCourses && differentProfessors)) {
+            this.setScreenLater(Constants.SCREENS.OVERVIEW)();
+        } else if (!differentCourses) {
+            this.onClickCourse(new_courses[0].course_whole_code);
+        } else { // Same professors
+            this.onClickInstructor(new_courses[0].professor);
+        }
     },
 
     /**
@@ -225,20 +260,20 @@ var CourseDetailComponent = React.createClass({displayName: "CourseDetailCompone
     },
 
     componentDidMount : function() {
-        this.setState({current_courses : this.getCoursesByInstructor(this.props.course)});
+        this.setState({current_courses : this.getCoursesByCourseCode(this.props.course)});
     },
 
     componentWillReceiveProps : function(next) {
-        this.setState({current_courses : this.getCoursesByInstructor(next.course)});
+        this.setState({current_courses : this.getCoursesByCourseCode(next.course)});
     },
 
-    getCoursesByInstructor : function(course) {
+    getCoursesByCourseCode : function(course) {
         var courses = [];
         if (course) {
             courses = this.props.taffy(
                         {the_course_as_a_whole : {isNumber: true}},
                         {'course_whole_code' : {isnocase: course}}
-                    ).order('professor,time').limit(Constants.SEARCH_RESULT_LIMIT).get();
+                    ).order('professor,datetime').limit(Constants.SEARCH_RESULT_LIMIT).get();
         }
 
         if (courses.length > 0) {
@@ -271,6 +306,7 @@ var CourseDetailComponent = React.createClass({displayName: "CourseDetailCompone
                 this.state.current_course_description != 0 &&
                     React.createElement("p", {className: "course-description"}, this.state.current_course_description), 
                 
+
                 React.createElement(OverviewComponent, {onClickCourse: this.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.current_courses, headers: headers})
             )
         );
@@ -346,7 +382,7 @@ var InstructorDetailComponent = React.createClass({displayName: "InstructorDetai
             courses = this.props.taffy(
                         {the_course_as_a_whole : {isNumber: true}},
                         {'professor' : {isnocase: instructor}}
-                    ).order('course_whole_code,professor,time').limit(Constants.SEARCH_RESULT_LIMIT).get();
+                    ).order('course_whole_code,datetime').limit(Constants.SEARCH_RESULT_LIMIT).get();
         }
 
         return courses;
@@ -430,6 +466,8 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
                 comparison = 1;
             }
         }
+
+        // TODO: Else sort on Time
 
         // Else sort on Professor
         if (comparison === 0) {
@@ -545,13 +583,17 @@ var OverviewCourseRowComponent = React.createClass({displayName: "OverviewCourse
     render : function() {
         var data = this.props.data;
 
+        var isCourseCodePresent = this.props.headers.indexOf('Course Code') != -1;
+        var isInstructorPresent = this.props.headers.indexOf('Instructor') != -1;
+
         return (
             React.createElement("tr", null, 
-                this.props.headers.indexOf('Course Code') != -1 &&
-                    React.createElement("td", {className: "course-code", onClick: this.onClickCourse}, data.course_whole_code, React.createElement("span", {className: "course_time"}, ' (' + data.time + ')')), 
+                isCourseCodePresent &&
+                    React.createElement("td", {className: "course-code", onClick: this.onClickCourse}, data.course_whole_code, React.createElement("span", {className: "course_time " + (isCourseCodePresent ? "" : "hidden")}, ' (' + data.time + ')')), 
                 
-                this.props.headers.indexOf('Instructor') != -1 &&
-                    React.createElement("td", {className: "prof-name", onClick: this.onClickInstructor}, data.professor), 
+
+                isInstructorPresent &&
+                    React.createElement("td", {className: "prof-name", onClick: this.onClickInstructor}, data.professor, React.createElement("span", {className: "course_time " + (isInstructorPresent && !isCourseCodePresent ? "" : "hidden")}, ' (' + data.time + ')')), 
                 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.the_course_as_a_whole, max: 5})), 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.the_course_content, max: 5})), 
