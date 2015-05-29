@@ -62,11 +62,15 @@ var DataAPI = (function () {
      */
     DataAPI.getTaffy = function (callback) {
         JSZipUtils.getBinaryContent(DataAPI.PAYLOAD_URL, function (err, data) {
+            var d = new Date();
+            var n = d.getTime();
             if (err) {
                 throw err;
             }
             var zip = new JSZip(data);
             var csv = zip.file(DataAPI.INSIDE_ZIP).asText();
+            var n = (new Date()).getTime() - d.getTime();
+            console.log(n);
             var lines = csv.split('\n');
             var header = lines[0].split(';');
             var output = [];
