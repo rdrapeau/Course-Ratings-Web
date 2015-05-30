@@ -149,13 +149,13 @@ var AppComponent = React.createClass({displayName: "AppComponent",
     },
 
     onClickCourse : function(course) {
-        // this.setState({activeCourse : course});
-        // this.setScreenLater(Constants.SCREENS.COURSE_DETAILS)();
+        this.setState({activeCourse : course});
+        this.setScreenLater(Constants.SCREENS.COURSE_DETAILS)();
     },
 
     onClickInstructor : function(instructor) {
-        // this.setState({activeInstructor : instructor});
-        // this.setScreenLater(Constants.SCREENS.INSTRUCTOR_DETAILS)();
+        this.setState({activeInstructor : instructor});
+        this.setScreenLater(Constants.SCREENS.INSTRUCTOR_DETAILS)();
     },
 
     /**
