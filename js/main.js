@@ -84,7 +84,7 @@ var DataAPI = (function () {
             }
             output.push(course);
         }
-        callback(TAFFY.taffy(output));
+        callback(TAFFY.taffy(output), output);
     };
     /**
      * Gets the organizations
@@ -146,7 +146,8 @@ var AppComponent = React.createClass({displayName: "AppComponent",
     componentDidMount : function() {
         var self = this;
 
-        DataAPI.getTaffy(function(taffy) {
+        DataAPI.getTaffy(function(taffy, courses) {
+            self.setState({allCourses : courses});
             self.setState({taffy : taffy});
         });
     },
@@ -169,6 +170,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
             active : Constants.SCREENS.OVERVIEW,
             current_courses : [],
             taffy : null,
+            allCourses : null,
             activeCourse : null,
             activeInstructor : null,
             currentSearch : ''
@@ -225,7 +227,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
                                     professor : {isnocase : professor}
                                 }).order('course_whole_code,professor,datetime').get();
         } else {
-            results = this.state.taffy().order('course_whole_code,professor,datetime').get();
+            results = this.state.allCourses;
         }
 
         if (course_department === '' && course_code === '' && professor === '') {
@@ -259,10 +261,15 @@ var AppComponent = React.createClass({displayName: "AppComponent",
 
         return (
             React.createElement("div", {id: "app"}, 
-                React.createElement("div", {className: "loading"}
+                this.state.taffy == null && this.state.allCourses == null && (
+
+                React.createElement("div", {className: "loading"}, 
+                    "Loading."
+                )
+
                 ), 
 
-                this.state.taffy != null && (
+                this.state.taffy != null && this.state.allCourses != null && (
 
                 React.createElement("div", {className: "loaded"}, 
                     React.createElement(HeaderComponent, {screen: this.state.active}), 
@@ -704,7 +711,6 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
         var keys = ['course_department', 'course_code', 'professor'];
         var allData = this.props.searchFunction('', '', '');
         var unique = this.getUnique(keys, allData);
-
 
         localStorage.setItem("course_department", unique.course_department.map(function(item) { return item.value; }).join(';'));
         localStorage.setItem("course_code", unique.course_code.map(function(item) { return item.value; }).join(';'));
