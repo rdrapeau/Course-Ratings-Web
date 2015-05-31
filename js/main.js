@@ -232,7 +232,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         }
 
         if (!course_department && !course_code && !professor) {
-            this.setState({current_courses : []});
+            this.resetPage();
         } else {
             this.setState({current_courses : results});
         }
@@ -250,6 +250,10 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         }
 
         return results;
+    },
+
+    resetPage : function() {
+        this.setState({current_courses : []});
     },
 
     /**
@@ -275,7 +279,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
 
                 React.createElement("div", {className: "loaded"}, 
                     React.createElement(HeaderComponent, {screen: this.state.active}), 
-                    React.createElement(SearchComponent, {searchFunction: this.getSearchResult}), 
+                    React.createElement(SearchComponent, {searchFunction: this.getSearchResult, resetFunction: this.resetPage}), 
                     React.createElement("div", {className: "screen " + (isOverview ? "active" : "")}, 
                         React.createElement("div", {className: "table-container"}, 
                             React.createElement(OverviewComponent, {ref: "overviewComponent", onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, currentData: this.state.current_courses, headers: Constants.OVERVIEW_HEADERS})
@@ -770,6 +774,7 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
                     'course_code' : localStorage['course_code'].split(';').map(function(item) { return {value: item, label: item};}),
                     'professor' : localStorage['professor'].split(';').map(function(item) { return {value: item, label: item};})
                     };
+            this.props.resetFunction();
         } else {
             var searchResults = this.props.searchFunction(course_department, course_code, professor)
             unique = this.getUnique(this.state.keys, searchResults);
@@ -781,7 +786,6 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
     },
 
     departmentChange: function(course_department) {
-        console.log(course_department);
         this.setState({course_department: course_department});
         this.update(course_department, this.state.course_code, this.state.professor);
     },
