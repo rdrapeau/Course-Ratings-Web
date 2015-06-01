@@ -282,7 +282,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
                     React.createElement(SearchComponent, {searchFunction: this.getSearchResult, resetFunction: this.resetPage}), 
                     React.createElement("div", {className: "screen " + (isOverview ? "active" : "")}, 
                         React.createElement("div", {className: "table-container"}, 
-                            React.createElement(OverviewComponent, {ref: "overviewComponent", onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, currentData: this.state.current_courses, headers: Constants.OVERVIEW_HEADERS})
+                            React.createElement(OverviewComponent, {ref: "overviewComponent", mainPage: true, onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, currentData: this.state.current_courses, headers: Constants.OVERVIEW_HEADERS})
                         )
                     ), 
                     React.createElement("div", {className: "screen " + (isCourseDetails ? "active" : "")}, 
@@ -831,9 +831,9 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
     },
 
     onScroll: function() {
-        var element = this.getDOMNode();
+        var element = this.getDOMNode().children[0];
         var rect = element.getBoundingClientRect();
-        var windowPos = window.pageYOffset;
+        var windowPos = window.scrollY;
 
         if (windowPos - element.offsetTop > 50) {
             this.setState({scrolledPast : true});
@@ -853,7 +853,8 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
             React.createElement("div", null, 
                 this.state.current_courses && (
         	        React.createElement("table", {className: "table table-curved"}, 
-    	        	    React.createElement(OverviewHeaderComponent, {headers: this.props.headers, onClickHeader: this.sortData, fixedHeader: true, scrollState: this.state.scrolledPast, width: this.state.barWidth}), 
+                        React.createElement("tbody", null, 
+                        React.createElement(OverviewHeaderComponent, {headers: this.props.headers, onClickHeader: this.sortData, fixedHeader: true, scrollState: this.state.scrolledPast, width: this.state.barWidth}), 
                         React.createElement(OverviewHeaderComponent, {ref: "headerComp", headers: this.props.headers, onClickHeader: this.sortData, fixedHeader: false}), 
 
         	        	this.state.current_courses.slice(0, Constants.SEARCH_RESULT_LIMIT).map(function(course) {
@@ -861,6 +862,7 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
                                 React.createElement(OverviewCourseRowComponent, {headers: self.props.headers, onClickCourse: self.props.onClickCourse, onClickInstructor: self.props.onClickInstructor, data: course})
         	        		);
         	        	})
+                        )
         	        )
                 )
             )
