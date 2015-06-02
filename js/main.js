@@ -115,7 +115,7 @@ var DataAPI = (function () {
 })();
 module.exports = DataAPI;
 
-},{"jszip":29,"jszip-utils":20,"taffydb":244}],4:[function(require,module,exports){
+},{"jszip":30,"jszip-utils":21,"taffydb":244}],4:[function(require,module,exports){
 var React = require('react');
 var Constants = require('../Constants');
 var DataAPI = require('../DataAPI');
@@ -282,7 +282,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
                     React.createElement(SearchComponent, {searchFunction: this.getSearchResult, resetFunction: this.resetPage}), 
                     React.createElement("div", {className: "screen " + (isOverview ? "active" : "")}, 
                         React.createElement("div", {className: "table-container"}, 
-                            React.createElement(OverviewComponent, {ref: "overviewComponent", mainPage: true, onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, currentData: this.state.current_courses, headers: Constants.OVERVIEW_HEADERS})
+                            React.createElement(OverviewComponent, {ref: "overviewComponent", onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, currentData: this.state.current_courses, headers: Constants.OVERVIEW_HEADERS, collapseKey: "course_whole_code"})
                         )
                     ), 
                     React.createElement("div", {className: "screen " + (isCourseDetails ? "active" : "")}, 
@@ -595,7 +595,7 @@ var CourseDetailComponent = React.createClass({displayName: "CourseDetailCompone
                     React.createElement("p", {className: "course-description"}, this.state.current_course_description), 
                 
                 React.createElement("div", {className: "time-series-body"}), 
-                React.createElement(OverviewComponent, {onClickCourse: this.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.current_courses, headers: headers})
+                React.createElement(OverviewComponent, {onClickCourse: this.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.current_courses, headers: headers, collapseKey: "professor"})
             )
         );
     }
@@ -603,7 +603,7 @@ var CourseDetailComponent = React.createClass({displayName: "CourseDetailCompone
 
 module.exports = CourseDetailComponent;
 
-},{"../Constants":2,"./OverviewComponent.jsx":8,"d3":18,"react":243}],6:[function(require,module,exports){
+},{"../Constants":2,"./OverviewComponent.jsx":8,"d3":19,"react":243}],6:[function(require,module,exports){
 var React = require('react');
 var Constants = require('../Constants');
 
@@ -695,7 +695,7 @@ var InstructorDetailComponent = React.createClass({displayName: "InstructorDetai
         return (
             React.createElement("div", {className: "table-container"}, 
                 React.createElement("h2", null, React.createElement("span", {className: "instructorDetailName"}, this.props.instructor), React.createElement("span", {className: "instructorDetailScore"}, "Score: ", React.createElement("span", {className: "scoreRating" + rating}, runningSum))), 
-                React.createElement(OverviewComponent, {onClickCourse: this.props.onClickCourse, onClickInstructor: function() {}, currentData: this.state.current_courses, headers: headers})
+                React.createElement(OverviewComponent, {onClickCourse: this.props.onClickCourse, onClickInstructor: function() {}, currentData: this.state.current_courses, headers: headers, collapseKey: "course_whole_code"})
             )
         );
 	}
@@ -728,12 +728,15 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
             current_sort_multiplier : 1,
             activeHeader : null,
             scrolledPast : false,
-            barWidth : 0
+            barWidth : 0,
+            allCourses : this.collapse(this.props.currentData)
         };
     },
 
     componentWillReceiveProps : function(next) {
-    	this.setState({current_courses : next.currentData});
+        this.setState({current_courses : next.currentData});
+        this.setState({allCourses : this.collapse(next.currentData)});
+
     	var elem = React.findDOMNode(this.refs.headerComp);
     	var header = elem.querySelector('th');
 
@@ -835,13 +838,115 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
         var rect = element.getBoundingClientRect();
         var windowPos = window.scrollY;
 
-        if (windowPos - element.offsetTop > 50) {
+        if (windowPos - element.offsetTop > 50 && !this.state.scrolledPast) {
             this.setState({scrolledPast : true});
-        } else {
+        } else if (windowPos - element.offsetTop < 50 && this.state.scrolledPast) {
             this.setState({scrolledPast : false});
         }
 
-        this.setState({barWidth : rect.width});
+        if (this.state.barWidth !== rect.width) {
+            this.setState({barWidth : rect.width});
+        }
+    },
+
+    copyObject: function(course) {
+        var result = {};
+        for (var key in course) {
+            result[key] = course[key];
+        }
+
+        return result;
+    },
+
+    collapse: function(current_courses) {
+        var collapse = {};
+        for (var i = 0; i < current_courses.length; i++) {
+            var course = current_courses[i];
+            var key = course[this.props.collapseKey];
+
+            if (key in collapse) {
+                collapse[key].push(this.copyObject(course));
+            } else {
+                collapse[key] = [this.copyObject(course)];
+            }
+        }
+
+        var allCourses = [];
+        for (var key in collapse) {
+            var courses = collapse[key];
+            if (courses.length === 1) {
+                courses[0].hidden = false;
+                courses[0].existing = true;
+                courses[0].colorThis = false;
+                allCourses.push(courses[0]);
+                continue;
+            }
+
+            var averageCourse = {
+                the_course_as_a_whole : 0.0,
+                the_course_content : 0.0,
+                amount_learned : 0.0,
+                instructors_effectiveness : 0.0,
+                grading_techniques : 0.0,
+                percent_enrolled : 0.0
+            };
+
+            for (var i = 0; i < courses.length; i++) {
+                var course = courses[i];
+
+                for (var attribute in averageCourse) {
+                    if (attribute === 'percent_enrolled') {
+                        averageCourse[attribute] += Math.min(100, course[attribute]) / courses.length;
+                    } else {
+                        averageCourse[attribute] += Math.min(5, course[attribute]) / courses.length;
+                    }
+                }
+            }
+
+            for (var attribute in averageCourse) {
+                if (attribute === 'percent_enrolled') {
+                    averageCourse[attribute] = Math.round(10 * averageCourse[attribute]) / 10.0;
+                } else {
+                    averageCourse[attribute] = Math.round(100 * averageCourse[attribute]) / 100.0;
+                }
+            }
+
+            averageCourse[this.props.collapseKey] = key;
+            if (this.props.collapseKey === 'course_whole_code') {
+                averageCourse.professor = '...';
+            } else {
+                averageCourse.course_whole_code = '...';
+            }
+
+            averageCourse.hidden = false;
+            averageCourse.existing = false;
+            averageCourse.showing = false;
+            averageCourse.colorThis = false;
+            allCourses.push(averageCourse);
+            for (var i = 0; i < courses.length; i++) {
+                courses[i].hidden = true;
+                courses[i].existing = true;
+                courses[i].colorThis = true;
+                allCourses.push(courses[i]);
+            }
+        }
+
+        return allCourses;
+    },
+
+    onClickMany: function(value) {
+        for (var i = 0; i < this.state.allCourses.length; i++) {
+            var course = this.state.allCourses[i];
+            if (course[this.props.collapseKey] === value) {
+                if (!course.existing) {
+                    course.showing = !course.showing;
+                } else {
+                    course.hidden = !course.hidden;
+                }
+            }
+        }
+
+        this.setState({allCourses : this.state.allCourses});
     },
 
 	/**
@@ -849,6 +954,7 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
 	 */
     render: function() {
     	var self = this;
+
         return (
             React.createElement("div", null, 
                 this.state.current_courses && (
@@ -857,11 +963,12 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
                         React.createElement(OverviewHeaderComponent, {headers: this.props.headers, onClickHeader: this.sortData, fixedHeader: true, scrollState: this.state.scrolledPast, width: this.state.barWidth}), 
                         React.createElement(OverviewHeaderComponent, {ref: "headerComp", headers: this.props.headers, onClickHeader: this.sortData, fixedHeader: false}), 
 
-        	        	this.state.current_courses.slice(0, Constants.SEARCH_RESULT_LIMIT).map(function(course) {
+        	        	this.state.allCourses.map(function(course) {
         	        		return (
-                                React.createElement(OverviewCourseRowComponent, {headers: self.props.headers, onClickCourse: self.props.onClickCourse, onClickInstructor: self.props.onClickInstructor, data: course})
+                                React.createElement(OverviewCourseRowComponent, {headers: self.props.headers, onClickCourse: self.props.onClickCourse, onClickInstructor: self.props.onClickInstructor, data: course, onClickMany: self.onClickMany, collapseKey: self.props.collapseKey})
         	        		);
         	        	})
+
                         )
         	        )
                 )
@@ -872,7 +979,7 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
 
 module.exports = OverviewComponent;
 
-},{"../Constants":2,"./OverviewCourseRowComponent.jsx":9,"./OverviewHeaderComponent.jsx":10,"jquery":19,"react":243,"react-window-mixins":78}],9:[function(require,module,exports){
+},{"../Constants":2,"./OverviewCourseRowComponent.jsx":9,"./OverviewHeaderComponent.jsx":10,"jquery":20,"react":243,"react-window-mixins":78}],9:[function(require,module,exports){
 var React = require('react');
 var Constants = require('../Constants');
 
@@ -890,24 +997,46 @@ var OverviewCourseRowComponent = React.createClass({displayName: "OverviewCourse
         this.props.onClickInstructor(this.props.data.professor);
     },
 
+    onClickMany : function() {
+        this.props.onClickMany(this.props.data[this.props.collapseKey]);
+    },
+
     /**
      * Render the header
      */
     render : function() {
         var data = this.props.data;
-
         var isCourseCodePresent = this.props.headers.indexOf('Course Code') != -1;
         var isInstructorPresent = this.props.headers.indexOf('Instructor') != -1;
 
-        return (
-            React.createElement("tr", null, 
-                isCourseCodePresent &&
-                    React.createElement("td", {className: "course-code", onClick: this.onClickCourse}, data.course_whole_code, React.createElement("span", {className: "course_time " + (isCourseCodePresent ? "" : "hidden")}, ' (' + data.time + ')')), 
-                
+        var courseCodeRow;
+        if (isCourseCodePresent) {
+            if (data.existing) {
+                courseCodeRow = React.createElement("td", {className: "course-code", onClick: this.onClickCourse}, data.course_whole_code, React.createElement("span", {className: "course_time " + (isCourseCodePresent ? "" : "hidden")}, ' (' + data.time + ')'));
+            } else {
+                courseCodeRow = React.createElement("td", null, React.createElement("span", {className: data.showing ? "glyphicon glyphicon-play rotated" : "glyphicon glyphicon-play", onClick: this.onClickMany}), React.createElement("span", {className: "course-code", onClick: this.onClickCourse}, data.course_whole_code));
+            }
+        }
 
-                isInstructorPresent &&
-                    React.createElement("td", {className: "prof-name", onClick: this.onClickInstructor}, data.professor, React.createElement("span", {className: "course_time " + (isInstructorPresent && !isCourseCodePresent ? "" : "hidden")}, ' (' + data.time + ')')), 
-                
+        var instructorRow;
+        if (isInstructorPresent) {
+            if (data.existing) {
+                instructorRow = React.createElement("td", {className: "prof-name", onClick: this.onClickInstructor}, data.professor, React.createElement("span", {className: "course_time " + (isInstructorPresent && !isCourseCodePresent ? "" : "hidden")}, ' (' + data.time + ')'));
+            } else {
+                instructorRow = React.createElement("td", null, React.createElement("span", {className: data.showing ? "glyphicon glyphicon-play rotated" : "glyphicon glyphicon-play", onClick: this.onClickMany}), React.createElement("span", {className: "prof-name", onClick: this.onClickInstructor}, data.professor));
+            }
+        }
+
+        if (isCourseCodePresent && isInstructorPresent) {
+            if (!data.existing) {
+                instructorRow = React.createElement("td", {className: "prof-name", onClick: this.onClickMany}, data.professor);
+            }
+        }
+
+        return (
+            React.createElement("tr", {className: (data.hidden ? "hidden" : "") + (data.colorThis ? " existing-expanded" : "")}, 
+                courseCodeRow, 
+                instructorRow, 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.the_course_as_a_whole, max: 5})), 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.the_course_content, max: 5})), 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.amount_learned, max: 5})), 
@@ -1083,7 +1212,7 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
 
 module.exports = SearchComponent;
 
-},{"../Constants":2,"react":243,"react-select":60}],12:[function(require,module,exports){
+},{"../Constants":2,"react":243,"react-select":62}],12:[function(require,module,exports){
 var React = require('react');
 var Constants = require('../Constants');
 
@@ -2869,6 +2998,57 @@ process.chdir = function (dir) {
 process.umask = function() { return 0; };
 
 },{}],18:[function(require,module,exports){
+/*!
+  Copyright (c) 2015 Jed Watson.
+  Licensed under the MIT License (MIT), see
+  http://jedwatson.github.io/classnames
+*/
+
+(function () {
+	'use strict';
+
+	function classNames () {
+
+		var classes = '';
+
+		for (var i = 0; i < arguments.length; i++) {
+			var arg = arguments[i];
+			if (!arg) continue;
+
+			var argType = typeof arg;
+
+			if ('string' === argType || 'number' === argType) {
+				classes += ' ' + arg;
+
+			} else if (Array.isArray(arg)) {
+				classes += ' ' + classNames.apply(null, arg);
+
+			} else if ('object' === argType) {
+				for (var key in arg) {
+					if (arg.hasOwnProperty(key) && arg[key]) {
+						classes += ' ' + key;
+					}
+				}
+			}
+		}
+
+		return classes.substr(1);
+	}
+
+	if (typeof define === 'function' && typeof define.amd === 'object' && define.amd) {
+		// AMD. Register as an anonymous module.
+		define(function () {
+			return classNames;
+		});
+	} else if (typeof module !== 'undefined' && module.exports) {
+		module.exports = classNames;
+	} else {
+		window.classNames = classNames;
+	}
+
+}());
+
+},{}],19:[function(require,module,exports){
 !function() {
   var d3 = {
     version: "3.5.5"
@@ -12373,7 +12553,7 @@ process.umask = function() { return 0; };
   if (typeof define === "function" && define.amd) define(d3); else if (typeof module === "object" && module.exports) module.exports = d3;
   this.d3 = d3;
 }();
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v2.1.4
  * http://jquery.com/
@@ -21585,7 +21765,7 @@ return jQuery;
 
 }));
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 'use strict';
 
 var JSZipUtils = {};
@@ -21690,7 +21870,7 @@ module.exports = JSZipUtils;
 // enforcing Stuk's coding style
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 'use strict';
 // private property
 var _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
@@ -21762,7 +21942,7 @@ exports.decode = function(input, utf8) {
 
 };
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 'use strict';
 function CompressedObject() {
     this.compressedSize = 0;
@@ -21792,7 +21972,7 @@ CompressedObject.prototype = {
 };
 module.exports = CompressedObject;
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 'use strict';
 exports.STORE = {
     magic: "\x00\x00",
@@ -21807,7 +21987,7 @@ exports.STORE = {
 };
 exports.DEFLATE = require('./flate');
 
-},{"./flate":28}],24:[function(require,module,exports){
+},{"./flate":29}],25:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -21911,7 +22091,7 @@ module.exports = function crc32(input, crc) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./utils":41}],25:[function(require,module,exports){
+},{"./utils":42}],26:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -22020,7 +22200,7 @@ DataReader.prototype = {
 };
 module.exports = DataReader;
 
-},{"./utils":41}],26:[function(require,module,exports){
+},{"./utils":42}],27:[function(require,module,exports){
 'use strict';
 exports.base64 = false;
 exports.binary = false;
@@ -22033,7 +22213,7 @@ exports.comment = null;
 exports.unixPermissions = null;
 exports.dosPermissions = null;
 
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 'use strict';
 var utils = require('./utils');
 
@@ -22140,7 +22320,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./utils":41}],28:[function(require,module,exports){
+},{"./utils":42}],29:[function(require,module,exports){
 'use strict';
 var USE_TYPEDARRAY = (typeof Uint8Array !== 'undefined') && (typeof Uint16Array !== 'undefined') && (typeof Uint32Array !== 'undefined');
 
@@ -22158,7 +22338,7 @@ exports.uncompress =  function(input) {
     return pako.inflateRaw(input);
 };
 
-},{"pako":44}],29:[function(require,module,exports){
+},{"pako":45}],30:[function(require,module,exports){
 'use strict';
 
 var base64 = require('./base64');
@@ -22239,7 +22419,7 @@ JSZip.base64 = {
 JSZip.compressions = require('./compressions');
 module.exports = JSZip;
 
-},{"./base64":21,"./compressions":23,"./defaults":26,"./deprecatedPublicUtils":27,"./load":30,"./object":33,"./support":37}],30:[function(require,module,exports){
+},{"./base64":22,"./compressions":24,"./defaults":27,"./deprecatedPublicUtils":28,"./load":31,"./object":34,"./support":38}],31:[function(require,module,exports){
 'use strict';
 var base64 = require('./base64');
 var ZipEntries = require('./zipEntries');
@@ -22272,7 +22452,7 @@ module.exports = function(data, options) {
     return this;
 };
 
-},{"./base64":21,"./zipEntries":42}],31:[function(require,module,exports){
+},{"./base64":22,"./zipEntries":43}],32:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 module.exports = function(data, encoding){
@@ -22283,7 +22463,7 @@ module.exports.test = function(b){
 };
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":13}],32:[function(require,module,exports){
+},{"buffer":13}],33:[function(require,module,exports){
 'use strict';
 var Uint8ArrayReader = require('./uint8ArrayReader');
 
@@ -22305,7 +22485,7 @@ NodeBufferReader.prototype.readData = function(size) {
 };
 module.exports = NodeBufferReader;
 
-},{"./uint8ArrayReader":38}],33:[function(require,module,exports){
+},{"./uint8ArrayReader":39}],34:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var utils = require('./utils');
@@ -23190,7 +23370,7 @@ var out = {
 };
 module.exports = out;
 
-},{"./base64":21,"./compressedObject":22,"./compressions":23,"./crc32":24,"./defaults":26,"./nodeBuffer":31,"./signature":34,"./stringWriter":36,"./support":37,"./uint8ArrayWriter":39,"./utf8":40,"./utils":41}],34:[function(require,module,exports){
+},{"./base64":22,"./compressedObject":23,"./compressions":24,"./crc32":25,"./defaults":27,"./nodeBuffer":32,"./signature":35,"./stringWriter":37,"./support":38,"./uint8ArrayWriter":40,"./utf8":41,"./utils":42}],35:[function(require,module,exports){
 'use strict';
 exports.LOCAL_FILE_HEADER = "PK\x03\x04";
 exports.CENTRAL_FILE_HEADER = "PK\x01\x02";
@@ -23199,7 +23379,7 @@ exports.ZIP64_CENTRAL_DIRECTORY_LOCATOR = "PK\x06\x07";
 exports.ZIP64_CENTRAL_DIRECTORY_END = "PK\x06\x06";
 exports.DATA_DESCRIPTOR = "PK\x07\x08";
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 var utils = require('./utils');
@@ -23237,7 +23417,7 @@ StringReader.prototype.readData = function(size) {
 };
 module.exports = StringReader;
 
-},{"./dataReader":25,"./utils":41}],36:[function(require,module,exports){
+},{"./dataReader":26,"./utils":42}],37:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -23269,7 +23449,7 @@ StringWriter.prototype = {
 
 module.exports = StringWriter;
 
-},{"./utils":41}],37:[function(require,module,exports){
+},{"./utils":42}],38:[function(require,module,exports){
 (function (Buffer){
 'use strict';
 exports.base64 = true;
@@ -23307,7 +23487,7 @@ else {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":13}],38:[function(require,module,exports){
+},{"buffer":13}],39:[function(require,module,exports){
 'use strict';
 var DataReader = require('./dataReader');
 
@@ -23356,7 +23536,7 @@ Uint8ArrayReader.prototype.readData = function(size) {
 };
 module.exports = Uint8ArrayReader;
 
-},{"./dataReader":25}],39:[function(require,module,exports){
+},{"./dataReader":26}],40:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -23394,7 +23574,7 @@ Uint8ArrayWriter.prototype = {
 
 module.exports = Uint8ArrayWriter;
 
-},{"./utils":41}],40:[function(require,module,exports){
+},{"./utils":42}],41:[function(require,module,exports){
 'use strict';
 
 var utils = require('./utils');
@@ -23603,7 +23783,7 @@ exports.utf8decode = function utf8decode(buf) {
 };
 // vim: set shiftwidth=4 softtabstop=4:
 
-},{"./nodeBuffer":31,"./support":37,"./utils":41}],41:[function(require,module,exports){
+},{"./nodeBuffer":32,"./support":38,"./utils":42}],42:[function(require,module,exports){
 'use strict';
 var support = require('./support');
 var compressions = require('./compressions');
@@ -23931,7 +24111,7 @@ exports.isRegExp = function (object) {
 };
 
 
-},{"./compressions":23,"./nodeBuffer":31,"./support":37}],42:[function(require,module,exports){
+},{"./compressions":24,"./nodeBuffer":32,"./support":38}],43:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var NodeBufferReader = require('./nodeBufferReader');
@@ -24154,7 +24334,7 @@ ZipEntries.prototype = {
 // }}} end of ZipEntries
 module.exports = ZipEntries;
 
-},{"./nodeBufferReader":32,"./object":33,"./signature":34,"./stringReader":35,"./support":37,"./uint8ArrayReader":38,"./utils":41,"./zipEntry":43}],43:[function(require,module,exports){
+},{"./nodeBufferReader":33,"./object":34,"./signature":35,"./stringReader":36,"./support":38,"./uint8ArrayReader":39,"./utils":42,"./zipEntry":44}],44:[function(require,module,exports){
 'use strict';
 var StringReader = require('./stringReader');
 var utils = require('./utils');
@@ -24466,7 +24646,7 @@ ZipEntry.prototype = {
 };
 module.exports = ZipEntry;
 
-},{"./compressedObject":22,"./object":33,"./stringReader":35,"./utils":41}],44:[function(require,module,exports){
+},{"./compressedObject":23,"./object":34,"./stringReader":36,"./utils":42}],45:[function(require,module,exports){
 // Top level file is just a mixin of submodules & constants
 'use strict';
 
@@ -24481,7 +24661,7 @@ var pako = {};
 assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
-},{"./lib/deflate":45,"./lib/inflate":46,"./lib/utils/common":47,"./lib/zlib/constants":50}],45:[function(require,module,exports){
+},{"./lib/deflate":46,"./lib/inflate":47,"./lib/utils/common":48,"./lib/zlib/constants":51}],46:[function(require,module,exports){
 'use strict';
 
 
@@ -24846,7 +25026,7 @@ exports.Deflate = Deflate;
 exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
-},{"./utils/common":47,"./utils/strings":48,"./zlib/deflate.js":52,"./zlib/messages":57,"./zlib/zstream":59}],46:[function(require,module,exports){
+},{"./utils/common":48,"./utils/strings":49,"./zlib/deflate.js":53,"./zlib/messages":58,"./zlib/zstream":60}],47:[function(require,module,exports){
 'use strict';
 
 
@@ -25215,7 +25395,7 @@ exports.inflate = inflate;
 exports.inflateRaw = inflateRaw;
 exports.ungzip  = inflate;
 
-},{"./utils/common":47,"./utils/strings":48,"./zlib/constants":50,"./zlib/gzheader":53,"./zlib/inflate.js":55,"./zlib/messages":57,"./zlib/zstream":59}],47:[function(require,module,exports){
+},{"./utils/common":48,"./utils/strings":49,"./zlib/constants":51,"./zlib/gzheader":54,"./zlib/inflate.js":56,"./zlib/messages":58,"./zlib/zstream":60}],48:[function(require,module,exports){
 'use strict';
 
 
@@ -25318,7 +25498,7 @@ exports.setTyped = function (on) {
 };
 
 exports.setTyped(TYPED_OK);
-},{}],48:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
 
@@ -25505,7 +25685,7 @@ exports.utf8border = function(buf, max) {
   return (pos + _utf8len[buf[pos]] > max) ? pos : max;
 };
 
-},{"./common":47}],49:[function(require,module,exports){
+},{"./common":48}],50:[function(require,module,exports){
 'use strict';
 
 // Note: adler32 takes 12% for level 0 and 2% for level 6.
@@ -25538,7 +25718,7 @@ function adler32(adler, buf, len, pos) {
 
 
 module.exports = adler32;
-},{}],50:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 module.exports = {
 
   /* Allowed flush values; see deflate() and inflate() below for details */
@@ -25586,7 +25766,7 @@ module.exports = {
   Z_DEFLATED:               8
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
-},{}],51:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 'use strict';
 
 // Note: we can't get significant speed boost here.
@@ -25628,7 +25808,7 @@ function crc32(crc, buf, len, pos) {
 
 
 module.exports = crc32;
-},{}],52:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 'use strict';
 
 var utils   = require('../utils/common');
@@ -27394,7 +27574,7 @@ exports.deflatePending = deflatePending;
 exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
-},{"../utils/common":47,"./adler32":49,"./crc32":51,"./messages":57,"./trees":58}],53:[function(require,module,exports){
+},{"../utils/common":48,"./adler32":50,"./crc32":52,"./messages":58,"./trees":59}],54:[function(require,module,exports){
 'use strict';
 
 
@@ -27435,7 +27615,7 @@ function GZheader() {
 }
 
 module.exports = GZheader;
-},{}],54:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 'use strict';
 
 // See state defs from inflate.js
@@ -27762,7 +27942,7 @@ module.exports = function inflate_fast(strm, start) {
   return;
 };
 
-},{}],55:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 'use strict';
 
 
@@ -29266,7 +29446,7 @@ exports.inflateSync = inflateSync;
 exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
-},{"../utils/common":47,"./adler32":49,"./crc32":51,"./inffast":54,"./inftrees":56}],56:[function(require,module,exports){
+},{"../utils/common":48,"./adler32":50,"./crc32":52,"./inffast":55,"./inftrees":57}],57:[function(require,module,exports){
 'use strict';
 
 
@@ -29593,7 +29773,7 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   return 0;
 };
 
-},{"../utils/common":47}],57:[function(require,module,exports){
+},{"../utils/common":48}],58:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -29607,7 +29787,7 @@ module.exports = {
   '-5':   'buffer error',        /* Z_BUF_ERROR     (-5) */
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
-},{}],58:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 'use strict';
 
 
@@ -30807,7 +30987,7 @@ exports._tr_stored_block = _tr_stored_block;
 exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
-},{"../utils/common":47}],59:[function(require,module,exports){
+},{"../utils/common":48}],60:[function(require,module,exports){
 'use strict';
 
 
@@ -30837,7 +31017,128 @@ function ZStream() {
 }
 
 module.exports = ZStream;
-},{}],60:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
+'use strict';
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
+var React = require('react');
+
+var sizerStyle = { position: 'absolute', visibility: 'hidden', height: 0, width: 0, overflow: 'scroll', whiteSpace: 'nowrap' };
+
+var AutosizeInput = React.createClass({
+
+	displayName: 'AutosizeInput',
+
+	propTypes: {
+		value: React.PropTypes.any, // field value
+		defaultValue: React.PropTypes.any, // default field value
+		onChange: React.PropTypes.func, // onChange handler: function(newValue) {}
+		style: React.PropTypes.object, // css styles for the outer element
+		className: React.PropTypes.string, // className for the outer element
+		minWidth: React.PropTypes.oneOfType([// minimum width for input element
+		React.PropTypes.number, React.PropTypes.string]),
+		inputStyle: React.PropTypes.object, // css styles for the input element
+		inputClassName: React.PropTypes.string // className for the input element
+	},
+
+	getDefaultProps: function getDefaultProps() {
+		return {
+			minWidth: 1
+		};
+	},
+
+	getInitialState: function getInitialState() {
+		return {
+			inputWidth: this.props.minWidth
+		};
+	},
+
+	componentDidMount: function componentDidMount() {
+		this.copyInputStyles();
+		this.updateInputWidth();
+	},
+
+	componentDidUpdate: function componentDidUpdate() {
+		this.updateInputWidth();
+	},
+
+	copyInputStyles: function copyInputStyles() {
+		if (!this.isMounted() || !window.getComputedStyle) {
+			return;
+		}
+		var inputStyle = window.getComputedStyle(this.refs.input.getDOMNode());
+		var widthNode = this.refs.sizer.getDOMNode();
+		widthNode.style.fontSize = inputStyle.fontSize;
+		widthNode.style.fontFamily = inputStyle.fontFamily;
+		if (this.props.placeholder) {
+			var placeholderNode = this.refs.placeholderSizer.getDOMNode();
+			placeholderNode.style.fontSize = inputStyle.fontSize;
+			placeholderNode.style.fontFamily = inputStyle.fontFamily;
+		}
+	},
+
+	updateInputWidth: function updateInputWidth() {
+		if (!this.isMounted() || typeof this.refs.sizer.getDOMNode().scrollWidth === 'undefined') {
+			return;
+		}
+		var newInputWidth;
+		if (this.props.placeholder) {
+			newInputWidth = Math.max(this.refs.sizer.getDOMNode().scrollWidth, this.refs.placeholderSizer.getDOMNode().scrollWidth) + 2;
+		} else {
+			newInputWidth = this.refs.sizer.getDOMNode().scrollWidth + 2;
+		}
+		if (newInputWidth < this.props.minWidth) {
+			newInputWidth = this.props.minWidth;
+		}
+		if (newInputWidth !== this.state.inputWidth) {
+			this.setState({
+				inputWidth: newInputWidth
+			});
+		}
+	},
+
+	getInput: function getInput() {
+		return this.refs.input;
+	},
+
+	focus: function focus() {
+		this.refs.input.getDOMNode().focus();
+	},
+
+	select: function select() {
+		this.refs.input.getDOMNode().select();
+	},
+
+	render: function render() {
+
+		var nbspValue = (this.props.value || '').replace(/ /g, '&nbsp;');
+
+		var wrapperStyle = this.props.style || {};
+		wrapperStyle.display = 'inline-block';
+
+		var inputStyle = this.props.inputStyle || {};
+		inputStyle.width = this.state.inputWidth;
+
+		var placeholder = this.props.placeholder ? React.createElement(
+			'div',
+			{ ref: 'placeholderSizer', style: sizerStyle },
+			this.props.placeholder
+		) : null;
+
+		return React.createElement(
+			'div',
+			{ className: this.props.className, style: wrapperStyle },
+			React.createElement('input', _extends({}, this.props, { ref: 'input', className: this.props.inputClassName, style: inputStyle })),
+			React.createElement('div', { ref: 'sizer', style: sizerStyle, dangerouslySetInnerHTML: { __html: nbspValue } }),
+			placeholder
+		);
+	}
+
+});
+
+module.exports = AutosizeInput;
+},{"react":243}],62:[function(require,module,exports){
 'use strict';
 
 var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
@@ -31589,7 +31890,7 @@ var Select = React.createClass({
 });
 
 module.exports = Select;
-},{"./Value":61,"classnames":62,"react":243,"react-input-autosize":63}],61:[function(require,module,exports){
+},{"./Value":63,"classnames":18,"react":243,"react-input-autosize":61}],63:[function(require,module,exports){
 'use strict';
 
 var React = require('react');
@@ -31642,178 +31943,6 @@ var Option = React.createClass({
 });
 
 module.exports = Option;
-},{"react":243}],62:[function(require,module,exports){
-/*!
-  Copyright (c) 2015 Jed Watson.
-  Licensed under the MIT License (MIT), see
-  http://jedwatson.github.io/classnames
-*/
-
-(function () {
-	'use strict';
-
-	function classNames () {
-
-		var classes = '';
-
-		for (var i = 0; i < arguments.length; i++) {
-			var arg = arguments[i];
-			if (!arg) continue;
-
-			var argType = typeof arg;
-
-			if ('string' === argType || 'number' === argType) {
-				classes += ' ' + arg;
-
-			} else if (Array.isArray(arg)) {
-				classes += ' ' + classNames.apply(null, arg);
-
-			} else if ('object' === argType) {
-				for (var key in arg) {
-					if (arg.hasOwnProperty(key) && arg[key]) {
-						classes += ' ' + key;
-					}
-				}
-			}
-		}
-
-		return classes.substr(1);
-	}
-
-	if (typeof define === 'function' && typeof define.amd === 'object' && define.amd) {
-		// AMD. Register as an anonymous module.
-		define(function () {
-			return classNames;
-		});
-	} else if (typeof module !== 'undefined' && module.exports) {
-		module.exports = classNames;
-	} else {
-		window.classNames = classNames;
-	}
-
-}());
-
-},{}],63:[function(require,module,exports){
-'use strict';
-
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
-
-var React = require('react');
-
-var sizerStyle = { position: 'absolute', visibility: 'hidden', height: 0, width: 0, overflow: 'scroll', whiteSpace: 'nowrap' };
-
-var AutosizeInput = React.createClass({
-
-	displayName: 'AutosizeInput',
-
-	propTypes: {
-		value: React.PropTypes.any, // field value
-		defaultValue: React.PropTypes.any, // default field value
-		onChange: React.PropTypes.func, // onChange handler: function(newValue) {}
-		style: React.PropTypes.object, // css styles for the outer element
-		className: React.PropTypes.string, // className for the outer element
-		minWidth: React.PropTypes.oneOfType([// minimum width for input element
-		React.PropTypes.number, React.PropTypes.string]),
-		inputStyle: React.PropTypes.object, // css styles for the input element
-		inputClassName: React.PropTypes.string // className for the input element
-	},
-
-	getDefaultProps: function getDefaultProps() {
-		return {
-			minWidth: 1
-		};
-	},
-
-	getInitialState: function getInitialState() {
-		return {
-			inputWidth: this.props.minWidth
-		};
-	},
-
-	componentDidMount: function componentDidMount() {
-		this.copyInputStyles();
-		this.updateInputWidth();
-	},
-
-	componentDidUpdate: function componentDidUpdate() {
-		this.updateInputWidth();
-	},
-
-	copyInputStyles: function copyInputStyles() {
-		if (!this.isMounted() || !window.getComputedStyle) {
-			return;
-		}
-		var inputStyle = window.getComputedStyle(this.refs.input.getDOMNode());
-		var widthNode = this.refs.sizer.getDOMNode();
-		widthNode.style.fontSize = inputStyle.fontSize;
-		widthNode.style.fontFamily = inputStyle.fontFamily;
-		if (this.props.placeholder) {
-			var placeholderNode = this.refs.placeholderSizer.getDOMNode();
-			placeholderNode.style.fontSize = inputStyle.fontSize;
-			placeholderNode.style.fontFamily = inputStyle.fontFamily;
-		}
-	},
-
-	updateInputWidth: function updateInputWidth() {
-		if (!this.isMounted() || typeof this.refs.sizer.getDOMNode().scrollWidth === 'undefined') {
-			return;
-		}
-		var newInputWidth;
-		if (this.props.placeholder) {
-			newInputWidth = Math.max(this.refs.sizer.getDOMNode().scrollWidth, this.refs.placeholderSizer.getDOMNode().scrollWidth) + 2;
-		} else {
-			newInputWidth = this.refs.sizer.getDOMNode().scrollWidth + 2;
-		}
-		if (newInputWidth < this.props.minWidth) {
-			newInputWidth = this.props.minWidth;
-		}
-		if (newInputWidth !== this.state.inputWidth) {
-			this.setState({
-				inputWidth: newInputWidth
-			});
-		}
-	},
-
-	getInput: function getInput() {
-		return this.refs.input;
-	},
-
-	focus: function focus() {
-		this.refs.input.getDOMNode().focus();
-	},
-
-	select: function select() {
-		this.refs.input.getDOMNode().select();
-	},
-
-	render: function render() {
-
-		var nbspValue = (this.props.value || '').replace(/ /g, '&nbsp;');
-
-		var wrapperStyle = this.props.style || {};
-		wrapperStyle.display = 'inline-block';
-
-		var inputStyle = this.props.inputStyle || {};
-		inputStyle.width = this.state.inputWidth;
-
-		var placeholder = this.props.placeholder ? React.createElement(
-			'div',
-			{ ref: 'placeholderSizer', style: sizerStyle },
-			this.props.placeholder
-		) : null;
-
-		return React.createElement(
-			'div',
-			{ className: this.props.className, style: wrapperStyle },
-			React.createElement('input', _extends({}, this.props, { ref: 'input', className: this.props.inputClassName, style: inputStyle })),
-			React.createElement('div', { ref: 'sizer', style: sizerStyle, dangerouslySetInnerHTML: { __html: nbspValue } }),
-			placeholder
-		);
-	}
-
-});
-
-module.exports = AutosizeInput;
 },{"react":243}],64:[function(require,module,exports){
 var css = ".chasing-dots {\n  width: 27px;\n  height: 27px;\n  position: relative;\n\n  -webkit-animation: rotate 2.0s infinite linear;\n  animation: rotate 2.0s infinite linear;\n}\n\n.dot1, .dot2 {\n  width: 60%;\n  height: 60%;\n  display: inline-block;\n  position: absolute;\n  top: 0;\n  background-color: #333;\n  border-radius: 100%;\n\n  -webkit-animation: bounce 2.0s infinite ease-in-out;\n  animation: bounce 2.0s infinite ease-in-out;\n}\n\n.dot2 {\n  top: auto;\n  bottom: 0px;\n  -webkit-animation-delay: -1.0s;\n  animation-delay: -1.0s;\n}\n\n@-webkit-keyframes rotate { 100% { -webkit-transform: rotate(360deg) }}\n@keyframes rotate {\n  100% {\n    transform: rotate(360deg);\n    -webkit-transform: rotate(360deg);\n  }\n}\n\n@-webkit-keyframes bounce {\n  0%, 100% { -webkit-transform: scale(0.0) }\n  50% { -webkit-transform: scale(1.0) }\n}\n\n@keyframes bounce {\n  0%, 100% {\n    transform: scale(0.0);\n    -webkit-transform: scale(0.0);\n  } 50% {\n    transform: scale(1.0);\n    -webkit-transform: scale(1.0);\n  }\n}\n\n"; (require("./../node_modules/cssify"))(css); module.exports = css;
 },{"./../node_modules/cssify":77}],65:[function(require,module,exports){
