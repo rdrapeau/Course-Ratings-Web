@@ -23,6 +23,11 @@ body, html {
 	display: block;
 }
 
+.opaque {
+    pointer-events: none;
+    opacity: 0;
+}
+
 .hidden {
     display: none;
 }
@@ -33,6 +38,7 @@ body, html {
     width: 483px;
     height: 66px;
     display: block;
+    cursor: pointer;
 }
 
 #search-bar-container {
@@ -234,16 +240,19 @@ td.no-pad {
 
 .topHeader {
   position: fixed;
-  z-index: 1000;
   top: -7px;
 }
 
 .topHeaderHidden {
+    z-index: -10;
+    pointer-events: none;
     opacity: 0;
     transition: opacity 0.25s ease-in-out;
 }
 
 .topHeaderLoaded {
+    pointer-events: auto;
+    z-index: 1000;
     opacity: 1;
     transition: opacity 0.25s ease-in-out;
 }
@@ -277,4 +286,57 @@ td.no-pad {
 
 .right {
     float: right;
+}
+
+.leftButton {
+    margin: 0 auto;
+    margin-right: 15px;
+}
+
+#screenButtonContainer {
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: -5px;
+}
+
+#screenButtonContainer button {
+    width: 170px;
+}
+
+button .glyphicon {
+    float: left;
+}
+
+#comparisonSearchBarsContainer {
+    width: 400px;
+    margin: 0 auto;
+    margin-top: 15px;
+}
+
+.faded {
+    opacity: 0.5;
+}
+
+.glyphicon-plus:hover {
+    color: green;
+    cursor: pointer;
+}
+
+.glyphicon-minus:hover {
+    color: red;
+    cursor: pointer;
+}
+
+.glyphicon-plus {
+    float: right;
+}
+
+.glyphicon-minus {
+    float: left;
+    margin-right: 10px;
+}
+
+.glyphicon-plus, .glyphicon-minus {
+    font-size: 30px;
+    margin-top: 2px;
 }
