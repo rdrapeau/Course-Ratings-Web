@@ -152,8 +152,39 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         var self = this;
 
         DataAPI.getTaffy(function(taffy, courses) {
-            self.setState({allCourses : taffy({the_course_as_a_whole : {isNumber: true}}).get()});
+            var allCourses = taffy({the_course_as_a_whole : {isNumber: true}}).get();
+            self.setState({allCourses : allCourses});
             self.setState({taffy : taffy});
+
+            var depAverages = {};
+            for (var i = 0; i < allCourses.length; i++) {
+                var course = allCourses[i];
+
+                if (!(course.course_department in depAverages)) {
+                    depAverages[course.course_department] = {};
+                    for (var j = 0; j < Constants.KEYS.length; j++) {
+                        depAverages[course.course_department][Constants.KEYS[j]] = course[Constants.KEYS[j]];
+                    }
+
+                    depAverages[course.course_department]['length'] = 1.0;
+                } else {
+                    for (var j = 0; j < Constants.KEYS.length; j++) {
+                        depAverages[course.course_department][Constants.KEYS[j]] += course[Constants.KEYS[j]];
+                    }
+
+                    depAverages[course.course_department]['length'] += 1.0;
+                }
+            }
+
+            for (var department in depAverages) {
+                for (var attribute in depAverages[department]) {
+                    if (attribute !== 'length') {
+                        depAverages[department][attribute] = Math.round(depAverages[department][attribute] / depAverages[department]['length'] * 100) / 100;
+                    }
+                }
+            }
+
+            self.setState({depAverages : depAverages});
         });
     },
 
@@ -186,7 +217,8 @@ var AppComponent = React.createClass({displayName: "AppComponent",
             activeCourse : null,
             activeInstructor : null,
             activeDepartment : null,
-            activeCourseCode : null
+            activeCourseCode : null,
+            depAverages : null
         };
     },
 
@@ -292,7 +324,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
 
         return (
             React.createElement("div", {id: "app"}, 
-                this.state.taffy == null && this.state.allCourses == null && (
+                !this.state.taffy && !this.state.allCourses && !this.state.depAverages && (
 
                 React.createElement("div", {className: "loading"}, 
                     React.createElement("span", {id: "loadingText"}, "Loading"), 
@@ -301,7 +333,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
 
                 ), 
 
-                this.state.taffy != null && this.state.allCourses != null && (
+                this.state.taffy && this.state.allCourses && this.state.depAverages && (
 
                 React.createElement("div", {className: "loaded"}, 
                     React.createElement(HeaderComponent, {screen: this.state.active, onImgClick: this.resetPage}), 
@@ -326,20 +358,20 @@ var AppComponent = React.createClass({displayName: "AppComponent",
 
                     React.createElement("div", {className: "screen " + (isOverview && this.state.current_courses.length > 0 ? "active" : "")}, 
                         React.createElement("div", {className: "table-container"}, 
-                            React.createElement(OverviewComponent, {ref: "overviewComponent", onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, currentData: this.state.current_courses, headers: Constants.OVERVIEW_HEADERS, collapseKey: "course_whole_code", departmentName: this.state.activeDepartment, displayTop: doDisplayTop, active: this.state.active})
+                            React.createElement(OverviewComponent, {ref: "overviewComponent", onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, currentData: this.state.current_courses, headers: Constants.OVERVIEW_HEADERS, collapseKey: "course_whole_code", departmentName: this.state.activeDepartment, displayTop: doDisplayTop, active: this.state.active, depAverages: this.state.depAverages})
                         )
                     ), 
 
                     React.createElement("div", {className: "screen " + (isCourseDetails ? "active" : "")}, 
-                        React.createElement(CourseDetailComponent, {onClickInstructor: this.onClickInstructor, course: this.state.activeCourse, taffy: this.state.taffy, active: this.state.active})
+                        React.createElement(CourseDetailComponent, {onClickInstructor: this.onClickInstructor, course: this.state.activeCourse, taffy: this.state.taffy, active: this.state.active, depAverages: this.state.depAverages})
                     ), 
 
                     React.createElement("div", {className: "screen " + (isInstructorDetails ? "active" : "")}, 
-                        React.createElement(InstructorDetailComponent, {onClickCourse: this.onClickCourse, instructor: this.state.activeInstructor, taffy: this.state.taffy, active: this.state.active})
+                        React.createElement(InstructorDetailComponent, {onClickCourse: this.onClickCourse, instructor: this.state.activeInstructor, taffy: this.state.taffy, active: this.state.active, depAverages: this.state.depAverages})
                     ), 
 
                     React.createElement("div", {className: "screen " + (isCompare ? "active" : "")}, 
-                        React.createElement(ComparisonComponent, {allCourses: this.state.allCourses, onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, taffy: this.state.taffy})
+                        React.createElement(ComparisonComponent, {allCourses: this.state.allCourses, onClickCourse: this.onClickCourse, onClickInstructor: this.onClickInstructor, taffy: this.state.taffy, depAverages: this.state.depAverages})
                     ), 
 
                     React.createElement("div", {className: "screen " + (isTutorial ? "active" : "")}, 
@@ -391,37 +423,19 @@ var SpecificSearchComponent = require('./SpecificSearchComponent.jsx');
 var ComparisonComponent = React.createClass({displayName: "ComparisonComponent",
 
     getInitialState : function() {
-        var departmentList = [];
-        if ('course_department' in localStorage) {
-            departmentList = localStorage['course_department'].split(';').map(function(item) { return {value: item, label: item};});
-        }
+        var departmentList = localStorage['course_department'].split(';').map(function(item) { return {value: item, label: item};});
 
-        var depAverages = {};
-        for (var i = 0; i < this.props.allCourses.length; i++) {
-            var course = this.props.allCourses[i];
+        if (!departmentList) {
+            departmentList = [];
 
-            if (!(course.course_department in depAverages)) {
-                depAverages[course.course_department] = {};
-                for (var j = 0; j < Constants.KEYS.length; j++) {
-                    depAverages[course.course_department][Constants.KEYS[j]] = course[Constants.KEYS[j]];
-                }
-
-                depAverages[course.course_department]['length'] = 1.0;
-            } else {
-                for (var j = 0; j < Constants.KEYS.length; j++) {
-                    depAverages[course.course_department][Constants.KEYS[j]] += course[Constants.KEYS[j]];
-                }
-
-                depAverages[course.course_department]['length'] += 1.0;
-            }
-        }
-
-        for (var department in depAverages) {
-            for (var attribute in depAverages[department]) {
-                if (attribute !== 'length') {
-                    depAverages[department][attribute] = Math.round(depAverages[department][attribute] / depAverages[department]['length'] * 100) / 100;
+            for (var i = 0; i < this.props.allCourses.length; i++) {
+                var course = this.props.allCourses[i];
+                if (departmentList.indexof(course.course_department) === -1) {
+                    departmentList.push(course.course_department);
                 }
             }
+
+            departmentList = departmentList.map(function(item) { return {value: item, label: item};});
         }
 
         return {
@@ -432,8 +446,7 @@ var ComparisonComponent = React.createClass({displayName: "ComparisonComponent",
             searchResults : [[]],
             departmentList : departmentList,
             courseLists : [[]],
-            compareKeys : Constants.KEYS,
-            depAverages : depAverages
+            compareKeys : Constants.KEYS
         };
     },
 
@@ -527,10 +540,10 @@ var ComparisonComponent = React.createClass({displayName: "ComparisonComponent",
                 ), 
 
                 React.createElement("div", {className: "table-container" + (this.state.courses.length > 0 ? "" : " hidden")}, 
-                    React.createElement(OverviewComponent, {reSort: true, ref: "overviewComponent", onClickCourse: this.props.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.courses, headers: Constants.OVERVIEW_HEADERS, collapseKey: "course_whole_code", active: Constants.SCREENS.COMPARE})
+                    React.createElement(OverviewComponent, {reSort: true, ref: "overviewComponent", onClickCourse: this.props.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.courses, headers: Constants.OVERVIEW_HEADERS, collapseKey: "course_whole_code", active: Constants.SCREENS.COMPARE, depAverages: this.props.depAverages})
                 ), 
 
-                React.createElement(BarChartComponent, {depAverages: this.state.depAverages, compareKeys: this.state.compareKeys, courses: this.state.courses, divId: "compareBarChart"})
+                React.createElement(BarChartComponent, {depAverages: this.props.depAverages, compareKeys: this.state.compareKeys, courses: this.state.courses, divId: "compareBarChart"})
             )
         );
     }
@@ -605,7 +618,7 @@ var CourseDetailComponent = React.createClass({displayName: "CourseDetailCompone
                     React.createElement("p", {className: "course-description"}, this.state.current_course_description), 
                 
                 React.createElement(LinePlotComponent, {divId: "courseDetailPlot", detailKey: "professor", current_courses: this.state.current_courses}), 
-                React.createElement(OverviewComponent, {onClickCourse: this.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.current_courses, headers: headers, collapseKey: "professor", active: this.props.active})
+                React.createElement(OverviewComponent, {onClickCourse: this.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.current_courses, headers: headers, collapseKey: "professor", active: this.props.active, depAverages: this.props.depAverages})
             )
         );
     }
@@ -692,7 +705,7 @@ var InstructorDetailComponent = React.createClass({displayName: "InstructorDetai
             React.createElement("div", {className: "table-container"}, 
                 React.createElement("h2", null, React.createElement("span", {className: "instructorDetailName"}, this.props.instructor), React.createElement("span", {className: "instructorDetailScore"}, "Score: ", React.createElement("span", {className: "scoreRating" + rating}, runningSum))), 
                 React.createElement(LinePlotComponent, {divId: "instructorDetailPlot", detailKey: "course_whole_code", current_courses: this.state.current_courses}), 
-                React.createElement(OverviewComponent, {onClickCourse: this.props.onClickCourse, onClickInstructor: function() {}, currentData: this.state.current_courses, headers: headers, collapseKey: "course_whole_code", active: this.props.active})
+                React.createElement(OverviewComponent, {onClickCourse: this.props.onClickCourse, onClickInstructor: function() {}, currentData: this.state.current_courses, headers: headers, collapseKey: "course_whole_code", active: this.props.active, depAverages: this.props.depAverages})
             )
         );
 	}
@@ -961,11 +974,11 @@ var LinePlotComponent = React.createClass({displayName: "LinePlotComponent",
         category.append("path")
             .attr("class", "line")
             .attr("d", function (d) {
-            return line(d.values);
-        })
+                return line(d.values);
+            })
             .style("stroke", function (d) {
-            return color(d.key);
-        });
+                return color(d.key);
+            });
 
         // Draws circle points on lines
         // Includes hovering
@@ -984,8 +997,10 @@ var LinePlotComponent = React.createClass({displayName: "LinePlotComponent",
             .attr("cy", function(d, i) {
                 return y(d.the_course_as_a_whole);
             })
-            .attr('r', 3)
-            .style("fill", "white");
+            .attr('r', 4)
+            .style("fill", function (d) {
+                return color(d.name);
+            });
 
         // Add underlying circle for larger hover area
         svg.selectAll('g.largeDot')
@@ -1312,6 +1327,7 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
                 }
             }
 
+            averageCourse['course_department'] = courses[0].course_department;
             averageCourse[this.props.collapseKey] = key;
             if (this.props.collapseKey === 'course_whole_code') {
                 averageCourse.professor = '...';
@@ -1382,7 +1398,7 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
 
         	        	this.state.allCourses.map(function(course) {
         	        		return (
-                                React.createElement(OverviewCourseRowComponent, {headers: self.props.headers, onClickCourse: self.props.onClickCourse, onClickInstructor: self.props.onClickInstructor, data: course, onClickMany: self.onClickMany, collapseKey: self.props.collapseKey})
+                                React.createElement(OverviewCourseRowComponent, {headers: self.props.headers, onClickCourse: self.props.onClickCourse, onClickInstructor: self.props.onClickInstructor, data: course, onClickMany: self.onClickMany, collapseKey: self.props.collapseKey, average: self.props.depAverages[course.course_department]})
         	        		);
         	        	})
 
@@ -1454,11 +1470,11 @@ var OverviewCourseRowComponent = React.createClass({displayName: "OverviewCourse
             React.createElement("tr", {className: (data.hidden ? "hidden" : "") + (data.colorThis ? " existing-expanded" : "")}, 
                 courseCodeRow, 
                 instructorRow, 
-                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.the_course_as_a_whole, max: 5})), 
-                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.the_course_content, max: 5})), 
-                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.amount_learned, max: 5})), 
-                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.instructors_effectiveness, max: 5})), 
-                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.grading_techniques, max: 5})), 
+                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.the_course_as_a_whole}, value: data.the_course_as_a_whole, max: 5})), 
+                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.the_course_content}, value: data.the_course_content, max: 5})), 
+                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.amount_learned}, value: data.amount_learned, max: 5})), 
+                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.instructors_effectiveness}, value: data.instructors_effectiveness, max: 5})), 
+                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.grading_techniques}, value: data.grading_techniques, max: 5})), 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.percent_enrolled, max: 100}))
             )
         );
@@ -1590,7 +1606,7 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
     update: function(course_department, course_code, professor) {
         var unique = {};
 
-        if (!course_department && !course_code && !professor && localStorage['course_department']) {
+        if (!course_department && !course_code && !professor && localStorage['course_department'] && localStorage['course_code'] && localStorage['professor']) {
             unique = {
                     'course_department' : localStorage['course_department'].split(';').map(function(item) { return {value: item, label: item};}),
                     'course_code' : localStorage['course_code'].split(';').map(function(item) { return {value: item, label: item};}),
@@ -1771,9 +1787,10 @@ var ValueBarComponent = React.createClass({displayName: "ValueBarComponent",
         var level = this.props.value ?
                     (percent >= 80 ? "green" :
                      percent >= 60 ? "yellow" : "red")
-                    : "disabled"
+                    : "disabled";
+
         return (
-            React.createElement("div", {className: "value-bar"}, 
+            React.createElement("div", {className: "value-bar", title: (this.props.average ? this.props.average.department + " Average: " + this.props.average.value : "")}, 
                 React.createElement("div", {className: "vb-bg " + level, style: {width : width}}
                 ), 
                 React.createElement("p", null, this.props.value ? this.props.value : "N/A")
