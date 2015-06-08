@@ -73,9 +73,9 @@ var DataAPI = (function () {
             var year = time.substring(2);
             course['datetime'] = year + DataAPI.TIME_TO_DATETIME[quarter];
             for (var j = 0; j < line.length; j++) {
-                if (!isNaN(Number(line[j]))) {
+                if (!isNaN(Number(line[j])) && header[j] != "course_code") {
                     course[header[j]] = Number(line[j]);
-                    if (header[j] != "course_code" && header[j] != "completed" && header[j] != "total_enrolled") {
+                    if (header[j] != "completed" && header[j] != "total_enrolled") {
                         course[header[j]] = Math.min(5, Number(course[header[j]]));
                     }
                 }
@@ -221,18 +221,24 @@ var AppComponent = React.createClass({displayName: "AppComponent",
 
     getSearchResult : function(course_department, course_code, professor) {
         var results = [];
+        var originalCourseCode = course_code;
+
+        if (course_code && course_code.substring(1) === 'XX') {
+            course_code = course_code.substring(0, 1);
+        }
+
         if (course_department && course_code && professor) {
             results = this.state.taffy(
                                 {
                                     course_department : {isnocase: course_department},
-                                    course_code : {'==' : course_code},
+                                    course_code : {'left' : course_code},
                                     professor : {isnocase : professor}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (course_department && course_code && !professor) {
             results = this.state.taffy(
                                 {
                                     course_department : {isnocase: course_department},
-                                    course_code : {'==' : course_code}
+                                    course_code : {'left' : course_code}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (course_department && !course_code && professor) {
             results = this.state.taffy(
@@ -248,13 +254,13 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         } else if (!course_department && course_code && professor) {
             results = this.state.taffy(
                                 {
-                                    course_code : {'==' : course_code},
+                                    course_code : {'left' : course_code},
                                     professor : {isnocase : professor}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (!course_department && course_code && !professor) {
             results = this.state.taffy(
                                 {
-                                    course_code : {'==' : course_code}
+                                    course_code : {'left' : course_code}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (!course_department && !course_code && professor) {
             results = this.state.taffy(
@@ -272,11 +278,11 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         }
 
         this.setState({activeDepartment : course_department});
-        this.setState({activeCourseCode : course_code});
+        this.setState({activeCourseCode : originalCourseCode});
         this.setState({activeInstructor : professor});
 
         if (results.length !== 0) {
-            if (course_department && course_code && !professor) {
+            if (course_department && course_code && !professor && course_code.length !== 1) {
                 this.onClickCourse(results[0].course_whole_code);
             } else if (professor && !course_code && !course_department) {
                 this.onClickInstructor(results[0].professor);
@@ -1822,7 +1828,7 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
     getInitialState: function() {
         var keys = ['course_department', 'course_code', 'professor'];
         var allData = this.props.searchFunction(null, null, null);
-        var unique = this.getUnique(keys, allData);
+        var unique = this.getUnique(keys, allData, null, null);
 
         localStorage.setItem("course_department", unique.course_department.map(function(item) { return item.value; }).join(';'));
         localStorage.setItem("course_code", unique.course_code.map(function(item) { return item.value; }).join(';'));
@@ -1847,7 +1853,7 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
         }
     },
 
-    getUnique : function(keys, results) {
+    getUnique : function(keys, results, currentDepartment, currentProfessor) {
         var unique = {};
         var done = {};
         for (var i = 0; i < keys.length; i++) {
@@ -1855,14 +1861,28 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
             done[keys[i]] = [];
         }
 
+        var possible = [];
         for (var i = 0; i < results.length; i++) {
             for (var j = 0; j < keys.length; j++) {
                 var option_value = results[i][keys[j]];
+
+                if (keys[j] === 'course_code') {
+                    var character = option_value.charAt(0);
+                    if (possible.indexOf(character) === -1 && (currentDepartment || currentProfessor)) {
+                        possible.push(character);
+                    }
+                }
+
                 if (done[keys[j]].indexOf(option_value) === -1) {
                     unique[keys[j]].push({value: option_value, label: option_value})
                     done[keys[j]].push(option_value);
                 }
             }
+        }
+
+        for (var i = 0; i < possible.length; i++) {
+            var option_value = possible[i] + 'XX';
+            unique['course_code'].push({value: option_value, label: option_value});
         }
 
         for (var i = 0; i < keys.length; i++) {
@@ -1883,6 +1903,10 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
     update: function(course_department, course_code, professor) {
         var unique = {};
 
+        if ((!course_department && !professor) && course_code && course_code.substring(1) == 'XX') {
+            course_code = null;
+        }
+
         if (!course_department && !course_code && !professor && localStorage['course_department'] && localStorage['course_code'] && localStorage['professor']) {
             unique = {
                     'course_department' : localStorage['course_department'].split(';').map(function(item) { return {value: item, label: item};}),
@@ -1892,7 +1916,7 @@ var SearchComponent = React.createClass({displayName: "SearchComponent",
             this.props.resetFunction();
         } else {
             var searchResults = this.props.searchFunction(course_department, course_code, professor);
-            unique = this.getUnique(this.state.keys, searchResults);
+            unique = this.getUnique(this.state.keys, searchResults, course_department, professor);
         }
 
         this.setState({departments : unique.course_department});
@@ -2049,10 +2073,18 @@ var TutorialComponent = React.createClass({displayName: "TutorialComponent",
                 React.createElement("img", {src: "img/searchBoxes.png", alt: "", className: "tutorial-image"}), 
 
                 React.createElement("p", null, 
+                    "To search for all courses at a specific level, for example all 100 level courses, a department" + ' ' +
+                    "or instructor must be specified.  A search for 1XX will return all 100 level courses, 2XX all" + ' ' + 
+                    "200 level courses and so on."
+                ), 
+
+                React.createElement("img", {src: "img/searchMultiple.png", alt: "", className: "search-multiple-style"}), 
+
+                React.createElement("p", null, 
                     "After you fill out one or more search boxes, a table summarizing the search results will appear."
                 ), 
 
-                React.createElement("img", {src: "img/initialTable.png", alt: "", className: "large-tutorial-image"}), 
+                React.createElement("img", {src: "img/initialTable.png", alt: "", className: "initial-table-style"}), 
 
                 React.createElement("h2", null, "Sorting Table Columns/Expanding Rows"), 
                 React.createElement("p", null, 
@@ -2081,6 +2113,8 @@ var TutorialComponent = React.createClass({displayName: "TutorialComponent",
                     "out evaluations for that class as a fraction.  Hovering over all other column entries will show" + ' ' + 
                     "the average department score for that column."
                 ), 
+
+                React.createElement("img", {src: "img/tableHover.png", alt: "Table with hover feature shown", className: "tableHoverStyle"}), 
 
                 React.createElement("h2", null, "Pages"), 
                 React.createElement("p", null, 
@@ -2142,7 +2176,7 @@ var TutorialComponent = React.createClass({displayName: "TutorialComponent",
                     "more courses."
                 ), 
                 
-                React.createElement("img", {src: "img/barchartSelection.png", alt: "Comparison page selection after selecting a class", className: "selection"}), 
+                React.createElement("img", {src: "img/barchartSelection.png", alt: "Comparison page selection after selecting a class", className: "compareCourseStyle"}), 
 
                 React.createElement("p", null, 
                     "Hovering over a bar will display the name of the course represented by the bar, as well as its" + ' ' + 
@@ -2169,6 +2203,7 @@ module.exports = TutorialComponent;
 },{"../Constants":1,"react":249}],17:[function(require,module,exports){
 var React = require('react');
 var Constants = require('../Constants');
+var JQuery = require('jquery');
 
 /**
  * Encapsulates the header of the application
@@ -2191,14 +2226,27 @@ var ValueBarComponent = React.createClass({displayName: "ValueBarComponent",
             hoverTitle = this.props.completed + ' / ' + this.props.total + ' Students';
         }
 
+        var averageStyle = null;
         if (this.props.average) {
             hoverTitle = this.props.average.department + " Average: " + this.props.average.value;
+            var marginPercent = this.props.average.value / this.props.max * 100;
+
+            averageStyle = {
+                'width': '4px',
+                'height': '100%',
+                'backgroundColor': 'black',
+                'marginLeft': marginPercent + '%',
+                'position' : 'relative',
+                'zIndex' : 100
+            };
         }
 
         return (
             React.createElement("div", {className: "value-bar", title: hoverTitle}, 
-                React.createElement("div", {className: "vb-bg " + level, style: {width : width}}
+                averageStyle && (
+                    React.createElement("div", {className: "averages", style: averageStyle})
                 ), 
+                React.createElement("div", {className: "vb-bg " + level, style: {width : width}}), 
                 React.createElement("p", null, this.props.value ? this.props.value : "N/A")
             )
         );
@@ -2207,7 +2255,7 @@ var ValueBarComponent = React.createClass({displayName: "ValueBarComponent",
 
 module.exports = ValueBarComponent;
 
-},{"../Constants":1,"react":249}],18:[function(require,module,exports){
+},{"../Constants":1,"jquery":26,"react":249}],18:[function(require,module,exports){
 // browserify.js (our library that clumps together all these javascript files)
 // needs a "main file" to derive all dependencies from and package up.
 // This is that file.
