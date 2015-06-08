@@ -283,10 +283,16 @@ td.no-pad {
 
 .left {
     float: left;
+    margin-left: 150px;
 }
 
 .right {
     float: right;
+    margin-right: 200px
+}
+
+.left, .right {
+    text-align: center;
 }
 
 .leftButton {
@@ -340,4 +346,64 @@ button .glyphicon {
 .glyphicon-plus, .glyphicon-minus {
     font-size: 30px;
     margin-top: 2px;
+}
+
+.tutorial {
+    display: block;
+    margin: 0 auto;
+    width: 1050px;
+    font-size: 16pt;
+}
+
+.tutorial-image {
+    width: 750px;
+    height: 420px;
+    display: block;
+    margin: 0 auto;
+}
+
+.large-tutorial-image {
+    width: 950px;
+    height: 350px;
+    display: block;
+    margin: 0 auto;
+}
+
+.taller-tutorial-image {
+    width: 950px;
+    height: 500px;
+    display: block;
+    margin: 0 auto;
+}
+
+.extra-taller-tutorial-image {
+    width: 950px;
+    height: 650px;
+    display: block;
+    margin: 0 auto;
+}
+
+.chart-final {
+    display: block;
+    margin: 0 auto;
+    height: 600px;
+    width: 850px;
+}
+
+.chart-table {
+    display: block;
+    margin: 0 auto;
+    height: 300px;
+    width: 950px;
+}
+
+.selection {
+    display: block;
+    margin: 0 auto;
+    height: 300px;
+    width: 650px;
+}
+
+#bar-svg {
+    width: 900px;
 }

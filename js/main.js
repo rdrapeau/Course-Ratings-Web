@@ -62,6 +62,7 @@ var DataAPI = (function () {
         var lines = csv.split('\n');
         var header = lines[0].split(';');
         var output = [];
+        var depAverages = {};
         for (var i = 1; i < lines.length - 1; i++) {
             var line = lines[i].split(';');
             var course = { 'course_whole_code': line[0] + line[1] };
@@ -74,6 +75,9 @@ var DataAPI = (function () {
             for (var j = 0; j < line.length; j++) {
                 if (!isNaN(Number(line[j]))) {
                     course[header[j]] = Number(line[j]);
+                    if (header[j] != "course_code" && header[j] != "completed" && header[j] != "total_enrolled") {
+                        course[header[j]] = Math.min(5, Number(course[header[j]]));
+                    }
                 }
                 else {
                     if (line[j] === 'NULL') {
@@ -84,9 +88,31 @@ var DataAPI = (function () {
                     }
                 }
             }
-            output.push(course);
+            if (course['the_course_as_a_whole']) {
+                output.push(course);
+            }
+            if (!(course['course_department'] in depAverages)) {
+                depAverages[course['course_department']] = {};
+                for (var j = 0; j < DataAPI.KEYS.length; j++) {
+                    depAverages[course['course_department']][DataAPI.KEYS[j]] = course[DataAPI.KEYS[j]];
+                }
+                depAverages[course['course_department']]['length'] = 1.0;
+            }
+            else {
+                for (var j = 0; j < DataAPI.KEYS.length; j++) {
+                    depAverages[course['course_department']][DataAPI.KEYS[j]] += course[DataAPI.KEYS[j]];
+                }
+                depAverages[course['course_department']]['length'] += 1.0;
+            }
         }
-        callback(TAFFY.taffy(output), output);
+        for (var department in depAverages) {
+            for (var attribute in depAverages[department]) {
+                if (attribute !== 'length') {
+                    depAverages[department][attribute] = Math.round(depAverages[department][attribute] / depAverages[department]['length'] * 100) / 100;
+                }
+            }
+        }
+        callback(TAFFY.taffy(output), output, depAverages);
     };
     /**
      * Gets the organizations
@@ -113,6 +139,7 @@ var DataAPI = (function () {
         "su": 2,
         "au": 3
     };
+    DataAPI.KEYS = ["the_course_as_a_whole", "the_course_content", "amount_learned", "instructors_effectiveness", "grading_techniques"];
     return DataAPI;
 })();
 module.exports = DataAPI;
@@ -151,39 +178,9 @@ var AppComponent = React.createClass({displayName: "AppComponent",
     componentDidMount : function() {
         var self = this;
 
-        DataAPI.getTaffy(function(taffy, courses) {
-            var allCourses = taffy({the_course_as_a_whole : {isNumber: true}}).get();
-            self.setState({allCourses : allCourses});
+        DataAPI.getTaffy(function(taffy, courses, depAverages) {
+            self.setState({allCourses : courses});
             self.setState({taffy : taffy});
-
-            var depAverages = {};
-            for (var i = 0; i < allCourses.length; i++) {
-                var course = allCourses[i];
-
-                if (!(course.course_department in depAverages)) {
-                    depAverages[course.course_department] = {};
-                    for (var j = 0; j < Constants.KEYS.length; j++) {
-                        depAverages[course.course_department][Constants.KEYS[j]] = course[Constants.KEYS[j]];
-                    }
-
-                    depAverages[course.course_department]['length'] = 1.0;
-                } else {
-                    for (var j = 0; j < Constants.KEYS.length; j++) {
-                        depAverages[course.course_department][Constants.KEYS[j]] += course[Constants.KEYS[j]];
-                    }
-
-                    depAverages[course.course_department]['length'] += 1.0;
-                }
-            }
-
-            for (var department in depAverages) {
-                for (var attribute in depAverages[department]) {
-                    if (attribute !== 'length') {
-                        depAverages[department][attribute] = Math.round(depAverages[department][attribute] / depAverages[department]['length'] * 100) / 100;
-                    }
-                }
-            }
-
             self.setState({depAverages : depAverages});
         });
     },
@@ -225,49 +222,42 @@ var AppComponent = React.createClass({displayName: "AppComponent",
     getSearchResult : function(course_department, course_code, professor) {
         var results = [];
         if (course_department && course_code && professor) {
-            results = this.state.taffy({
-                                the_course_as_a_whole : {isNumber: true}},
+            results = this.state.taffy(
                                 {
                                     course_department : {isnocase: course_department},
                                     course_code : {'==' : course_code},
                                     professor : {isnocase : professor}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (course_department && course_code && !professor) {
-            results = this.state.taffy({
-                                the_course_as_a_whole : {isNumber: true}},
+            results = this.state.taffy(
                                 {
                                     course_department : {isnocase: course_department},
                                     course_code : {'==' : course_code}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (course_department && !course_code && professor) {
-            results = this.state.taffy({
-                                the_course_as_a_whole : {isNumber: true}},
+            results = this.state.taffy(
                                 {
                                     course_department : {isnocase: course_department},
                                     professor : {isnocase : professor}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (course_department && !course_code && !professor) {
-            results = this.state.taffy({
-                                the_course_as_a_whole : {isNumber: true}},
+            results = this.state.taffy(
                                 {
                                     course_department : {isnocase: course_department}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (!course_department && course_code && professor) {
-            results = this.state.taffy({
-                                the_course_as_a_whole : {isNumber: true}},
+            results = this.state.taffy(
                                 {
                                     course_code : {'==' : course_code},
                                     professor : {isnocase : professor}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (!course_department && course_code && !professor) {
-            results = this.state.taffy({
-                                the_course_as_a_whole : {isNumber: true}},
+            results = this.state.taffy(
                                 {
                                     course_code : {'==' : course_code}
                                 }).order('course_whole_code,professor,datetime').get();
         } else if (!course_department && !course_code && professor) {
-            results = this.state.taffy({
-                                the_course_as_a_whole : {isNumber: true}},
+            results = this.state.taffy(
                                 {
                                     professor : {isnocase : professor}
                                 }).order('course_whole_code,professor,datetime').get();
@@ -394,21 +384,343 @@ var d3 = require('d3');
 var Constants = require('../Constants');
 
 var BarChartComponent = React.createClass({displayName: "BarChartComponent",
+    getBarChart : function() {
+        var courses = this.props.courses;
+        var compareKeys = this.props.compareKeys;
+        var avgData = this.props.depAverages;
+
+        JQuery("#" + this.props.divId).empty();
+
+
+        var courseNames = [];
+        function modifyData(data, keys) {
+            var newData = []
+            var existingData = {};
+            var coursesToRatings = {};
+            var coursesToCounts = {};
+
+            // Merge averages
+            for(var i = 0; i < data.length; i++) {
+                var dataPoint = data[i];
+
+                var ratings = coursesToRatings[dataPoint.course_whole_code];
+                if (ratings == undefined) {
+                  ratings = [];
+                  for(var j = 0; j < keys.length; j++) {
+                    ratings[j] = 0;
+                  }
+                }
+                var counts = coursesToCounts[dataPoint.course_whole_code];
+                if (counts == undefined) {
+                  counts = [];
+                  for(var j = 0; j < keys.length; j++) {
+                    counts[j] = 0;
+                  }
+                }
+                for(var j = 0; j < keys.length; j++) {
+                  ratings[j] = dataPoint[keys[j]] + ratings[j];
+                  counts[j]++;
+                }
+                coursesToRatings[dataPoint.course_whole_code] = ratings;
+                coursesToCounts[dataPoint.course_whole_code] = counts;
+
+                // To use as key
+                dataPointString = JSON.stringify({"course_whole_code": dataPoint["course_whole_code"]});
+
+                // Updated stored rating for a class
+                existingData[dataPointString] = {};
+            }
+
+            // Set to previous format
+            for (var attribute in existingData) {
+                if( existingData.hasOwnProperty(attribute) ) {
+                    var course = JSON.parse(attribute);
+                    var rating = existingData[attribute];
+
+                    var ratings = coursesToRatings[course.course_whole_code];
+                    var counts = coursesToCounts[course.course_whole_code];
+
+                    for(var i = 0; i < keys.length; i++) {
+                      course[keys[i]] = parseFloat((ratings[i] / counts[i]).toFixed(2));
+                    }
+
+                    // Get department from course name
+                    var courseName = course.course_whole_code;
+                    var firstDigitIndex = courseName.search(/\d/);
+
+                    var department = courseName;
+                    if (firstDigitIndex >= 0) {
+                        department = courseName.slice(0, firstDigitIndex);
+                    }
+                    course["averages"] = avgData[department];
+
+                    newData.push(course);
+                }
+            }
+
+            return newData;
+        }
+
+        function reorderData(data, keys, isAverage) {
+            var ratings = {}
+            for(var i = 0; i < keys.length; i++) {
+              ratings[i] = {};
+            }
+            var arr = {}
+
+            for(var i = 0; i < data.length; i++) {
+                var dataPoint = data[i];
+                var course_whole_code = dataPoint["course_whole_code"];
+                courseNames.push(course_whole_code);
+                for(var j = 0; j < keys.length; j++) {
+                    var val = dataPoint[keys[j]];
+                    if (isAverage) {
+                        val = dataPoint.averages[keys[j]]
+                    }
+                    ratings[j][course_whole_code] = val;
+                }
+            }
+
+            for(var i = 0; i < keys.length; i++) {
+              arr[keys[i]] = d3.entries(ratings[i]);
+            }
+            arr = d3.entries(arr);
+
+            return arr;
+        }
+
+        var margin = { top: 20, right: 20, bottom: 30, left: 40 },
+            width = 900 - margin.left - margin.right,
+            height = 550 - margin.top - margin.bottom;
+
+        var x0 = d3.scale.ordinal()
+            .rangeRoundBands([0, width - 100], .1);
+
+        var x1 = d3.scale.ordinal();
+
+        var y = d3.scale.linear()
+            .range([height, 0]);
+
+        var color = d3.scale.category10();
+
+        var xAxis = d3.svg.axis()
+            .scale(x0)
+            .orient("bottom");
+        xAxis.tickFormat(function(d) { return Constants.KEY_TO_HEADER[d]; });
+
+        var yAxis = d3.svg.axis()
+            .scale(y)
+            .orient("left");
+        yAxis.tickValues([0, 1, 2, 3, 4, 5]);
+        yAxis.tickFormat(d3.format(".0f"));
+
+        var svg = d3.select("#" + this.props.divId).append("svg")
+            .attr("class", "chart")
+            .attr("id", "bar-svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        var modifiedData = modifyData(courses, compareKeys);
+        data = reorderData(modifiedData, compareKeys, false);
+        dataAverage = reorderData(modifiedData, compareKeys, true);
+
+        var tip = d3.tip()
+            .attr('class', 'd3-tip')
+            .offset([-10, 0])
+            .html(function(d) {
+                return d.key.concat(": ").concat(d.value);
+            });
+
+        courseNames = d3.set(courseNames).values();
+
+        x0.domain(data.map(function (d) { return d.key; }));
+
+        x1.domain(courseNames).rangeRoundBands([0, x0.rangeBand()]);
+
+        y.domain([0, 5]);
+
+        // Creating Y and X Axis
+        svg.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + height + ")")
+            .call(xAxis);
+
+        svg.append("g")
+            .attr("class", "y axis")
+            .call(yAxis)
+        .append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 8 - margin.left)
+            .attr("x",0 - (height / 2))
+            .attr("dy", ".71em")
+            .style("text-anchor", "middle")
+            .text("Rating");
+
+        // Creating rectangles
+        var state = svg.selectAll(".state")
+            .data(data)
+        .enter().append("g")
+            .attr("class", "g")
+            .attr("transform", function (d) { return "translate(" + x0(d.key) + ",0)"; });
+
+        state.selectAll("rect")
+            .data(function (d) { return d.value; })
+        .enter().append("rect")
+            .attr("width", x1.rangeBand())
+            .attr("x", function (d) { 
+                return x1(d.key); 
+            })
+            .attr("y", function (d) { 
+                return y(d.value); 
+            })
+            .attr("height", function (d) { 
+                return height - y(d.value); 
+            })
+            .style("fill", function (d) { 
+                return color(d.key); 
+            });
+
+        if (svg.node() != null) {
+            svg.append("g").call(tip);
+        }
+
+        dataAverage.forEach(function (kv) {
+            kv.value.forEach(function (d) {
+                d.col = kv.key;
+            });
+        });
+
+        data.forEach(function (kv) {
+            kv.value.forEach(function (d) {
+                d.col = kv.key;
+            });
+        });
+
+        // Creating average bars
+        svg.selectAll(".avg")
+            .data(dataAverage)
+            .enter().append("g")
+                .attr("class", "g")
+                .attr("transform", function (d) { 
+                    return "translate(" + x0(d.key) + ",0)"; 
+                })
+                .selectAll("rect")
+                .data(function(d) {
+                    return d.value;
+                })
+                .enter().append("rect")
+                    .attr("class", function(d) {
+                        return d.col.concat(d.key);
+                    })
+                    .attr("x", function(d) { 
+                        return x1(d.key); 
+                    })
+                    .attr("width", x1.rangeBand())
+                    .attr("y", function(d) { 
+                        return y(d.value); 
+                    })
+                    .attr("height", function(d) { 
+                        return 5; 
+                    })
+                    .style("fill", function (d) { 
+                        return "black"; 
+                    })
+                    .style("fill-opacity", 0.0);
+
+        // Creating hovering
+        svg.selectAll(".hover")
+            .data(data)
+            .enter().append("g")
+                .attr("class", "g")
+                .attr("transform", function (d) { 
+                    return "translate(" + x0(d.key) + ",0)"; 
+                })
+                .selectAll("rect")
+                .data(function(d) {
+                    return d.value;
+                })
+                .enter().append("rect")
+                    .attr("class", "hover")
+                    .attr("x", function(d) { 
+                        return x1(d.key); 
+                    })
+                    .attr("width", x1.rangeBand())
+                    .attr("y", function(d) { 
+                        return y(5); 
+                    })
+                    .attr("height", function(d) { 
+                        return height - y(5); 
+                    })
+                    .on('mouseover', function(d){
+                        tip.show(d);
+                        d3.selectAll("." + d.col.concat(d.key)).style("fill-opacity", 0.7);
+                    })
+                    .on('mouseout', function(d) {
+                        tip.hide(d);
+                        d3.selectAll("." + d.col.concat(d.key)).style("fill-opacity", 0); 
+                    })
+                    .style("fill-opacity", 0.0);
+
+        // Creating the legend
+        var legend = svg.selectAll(".legend")
+            .data(courseNames.slice())
+        .enter().append("g")
+            .attr("class", "legend")
+            .attr("transform", function (d, i) { return "translate(0," + i * 20 + ")"; });
+
+        legend.append("rect")
+            .attr("x", width - 18 - 100 + 15)
+            .attr("width", 18)
+            .attr("height", 18)
+            .style("fill", color);
+
+        legend.append("text")
+            .attr("x", width - 24 + 30 - 100 + 15)
+            .attr("y", 9)
+            .attr("dy", ".35em")
+            .style("text-anchor", "start")
+            .text(function (d) { return d; });
+
+        var padding = courseNames.length + 1;
+
+        if (padding > 1) {
+            var legend2 = svg.selectAll(".legend2")
+                .data(["Department Average"])
+                .enter().append("g")
+                .attr("class", "legend2")
+                .attr("transform", function (d, i) { return "translate(0," + i * 20 + ")"; });
+
+            legend2.append("rect")
+                .attr("x", width - 18 - 100 + 15)
+                .attr("y", padding * 20)
+                .attr("width", 18)
+                .attr("height", 5)
+                .style("fill", "black")
+                .style("fill-opacity", 0.7);;
+
+            legend2.append("text")
+                .attr("x", width - 24 + 30 - 100 + 15)
+                .attr("y", 20 * padding + 6)
+                .style("text-anchor", "start")
+                .text(function (d) { return d; });
+        }
+
+    },
 
     /**
      * Render the page
      */
     render: function() {
-
-        var courses = this.props.courses;
-        var compareKeys = this.props.compareKeys;
-        var depAverages = this.props.depAverages;
+        this.getBarChart();
 
         return (
-            React.createElement("div", {id: this.props.divId, className: "barChartBody"})
+            React.createElement("div", {id: this.props.divId, className: "d3-chart-body"})
         );
     }
 });
+
 
 module.exports = BarChartComponent;
 
@@ -539,11 +851,15 @@ var ComparisonComponent = React.createClass({displayName: "ComparisonComponent",
                     searchBars
                 ), 
 
-                React.createElement("div", {className: "table-container" + (this.state.courses.length > 0 ? "" : " hidden")}, 
-                    React.createElement(OverviewComponent, {reSort: true, ref: "overviewComponent", onClickCourse: this.props.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.courses, headers: Constants.OVERVIEW_HEADERS, collapseKey: "course_whole_code", active: Constants.SCREENS.COMPARE, depAverages: this.props.depAverages})
-                ), 
+                this.state.courses.length > 0 && (
+                React.createElement("div", null, 
+                    React.createElement(BarChartComponent, {depAverages: this.props.depAverages, compareKeys: this.state.compareKeys, courses: this.state.courses, divId: "compareBarChart"}), 
 
-                React.createElement(BarChartComponent, {depAverages: this.props.depAverages, compareKeys: this.state.compareKeys, courses: this.state.courses, divId: "compareBarChart"})
+                    React.createElement("div", {className: "table-container"}, 
+                        React.createElement(OverviewComponent, {ref: "overviewComponent", onClickCourse: this.props.onClickCourse, onClickInstructor: this.props.onClickInstructor, currentData: this.state.courses, headers: Constants.OVERVIEW_HEADERS, collapseKey: "course_whole_code", active: Constants.SCREENS.COMPARE, depAverages: this.props.depAverages})
+                    )
+                )
+                )
             )
         );
     }
@@ -604,7 +920,7 @@ var CourseDetailComponent = React.createClass({displayName: "CourseDetailCompone
 
         var runningSum = 0.0;
         for (var i = 0; i < this.state.current_courses.length; i++) {
-            runningSum += Math.min(this.state.current_courses[i].the_course_as_a_whole, 5);
+            runningSum += this.state.current_courses[i].the_course_as_a_whole;
         }
 
         runningSum /= this.state.current_courses.length;
@@ -694,7 +1010,7 @@ var InstructorDetailComponent = React.createClass({displayName: "InstructorDetai
 
         var runningSum = 0.0;
         for (var i = 0; i < this.state.current_courses.length; i++) {
-            runningSum += Math.min(this.state.current_courses[i].the_course_as_a_whole, 5);
+            runningSum += this.state.current_courses[i].the_course_as_a_whole;
         }
 
         runningSum /= this.state.current_courses.length;
@@ -725,17 +1041,6 @@ var Constants = require('../Constants');
 var LinePlotComponent = React.createClass({displayName: "LinePlotComponent",
 
     getTimeSeries : function() {
-        /* TODO Vi + Emily
-        1) have the values on the x axis be spaced out better
-        2) Display only top X professors/courses
-
-        Notes:
-        1) The css for the d3 stuff is in fp-vjampala-emilygu-drapeau/frontend/static/css/time-series.css .
-        2) The main index.html file is in fp-vjampala-emilygu-drapeau/frontend/static/index.html .
-        You probably won't need to edit it.
-        3) The json Ryan created uses "datetime" instead of time.
-        */
-
         JQuery("#" + this.props.divId).empty();
         if (this.props.current_courses.length === 0) {
             return;
@@ -1029,11 +1334,11 @@ var LinePlotComponent = React.createClass({displayName: "LinePlotComponent",
             return color(d.name);
         });
 
-        category.append('rect')
-            .attr('x', width - 20 + 50 - 100)
-            .attr('y', function(d, i){ return i *  20;})
-            .attr('width', 10)
-            .attr('height', 10)
+        // Creates legend
+        category.append('circle')
+            .attr('cx', width - 20 + 50 - 100 + 5)
+            .attr('cy', function(d, i){ return (i *  20) + 5;})
+            .attr('r', 5)
             .style('fill', function(d) {
               return color(d.key);
             });
@@ -1051,7 +1356,7 @@ var LinePlotComponent = React.createClass({displayName: "LinePlotComponent",
         this.getTimeSeries();
 
         return (
-            React.createElement("div", {id: this.props.divId, className: "time-series-body"})
+            React.createElement("div", {id: this.props.divId, className: "d3-chart-body"})
         );
     }
 });
@@ -1250,30 +1555,6 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
     },
 
     collapse: function(current_courses) {
-        if (this.props.reSort) {
-            current_courses.sort(function(a, b) {
-                if (a.course_whole_code < b.course_whole_code) {
-                    return -1;
-                } else if (a.course_whole_code > b.course_whole_code) {
-                    return 1;
-                }
-
-                if (a.professor < b.professor) {
-                    return -1;
-                } else if (a.professor > b.professor) {
-                    return 1;
-                }
-
-                if (a.datetime < b.datetime) {
-                    return -1;
-                } else if (a.datetime > b.datetime) {
-                    return 1;
-                }
-
-                return 0;
-            });
-        }
-
         var collapse = {};
         for (var i = 0; i < current_courses.length; i++) {
             var course = current_courses[i];
@@ -1311,11 +1592,7 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
                 var course = courses[i];
 
                 for (var attribute in averageCourse) {
-                    if (attribute === 'percent_enrolled') {
-                        averageCourse[attribute] += Math.min(100, course[attribute]) / courses.length;
-                    } else {
-                        averageCourse[attribute] += Math.min(5, course[attribute]) / courses.length;
-                    }
+                    averageCourse[attribute] += course[attribute] / courses.length;
                 }
             }
 
@@ -1475,7 +1752,7 @@ var OverviewCourseRowComponent = React.createClass({displayName: "OverviewCourse
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.amount_learned}, value: data.amount_learned, max: 5})), 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.instructors_effectiveness}, value: data.instructors_effectiveness, max: 5})), 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.grading_techniques}, value: data.grading_techniques, max: 5})), 
-                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.percent_enrolled, max: 100}))
+                React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {value: data.percent_enrolled, total: data.total_enrolled, completed: data.completed, max: 100}))
             )
         );
     }
@@ -1761,8 +2038,127 @@ var TutorialComponent = React.createClass({displayName: "TutorialComponent",
      */
     render: function() {
         return (
-            React.createElement("div", null, 
-                "Tutorial Component"
+            React.createElement("div", {className: "tutorial"}, 
+                React.createElement("h1", null, "Exploring Courses"), 
+                React.createElement("p", null, 
+                    "Use the search boxes to enter a department, course code or instructor.  Click on each search" + ' ' + 
+                    "box for a drop down list of all options or start typing to filter out only options that match." + ' ' +
+                      "The more search boxes you fill out, the more specific your search will be."
+                ), 
+
+                React.createElement("img", {src: "img/searchBoxes.png", alt: "", className: "tutorial-image"}), 
+
+                React.createElement("p", null, 
+                    "After you fill out one or more search boxes, a table summarizing the search results will appear."
+                ), 
+
+                React.createElement("img", {src: "img/initialTable.png", alt: "", className: "large-tutorial-image"}), 
+
+                React.createElement("h2", null, "Sorting Table Columns/Expanding Rows"), 
+                React.createElement("p", null, 
+                    "Clicking on a column name will sort by that column.  An arrow to the right of the column name" + ' ' + 
+                    "indicates if the column is in ascending or descending order.  Clicking on the name toggles the" + ' ' + 
+                    "sorting order."
+                ), 
+
+                React.createElement("p", null, 
+                    "Some rows in the table may have a triangle next to them. This indicates that there have been" + ' ' + 
+                    "multiple offerings of that course, and this row contains the average of the ratings of all" + ' ' + 
+                    "offerings. Clicking on the triangle will expand the row to show all offerings of the class." + ' ' +  
+                    "If multiple expanded rows have the same course code/instructor and time, they are different" + ' ' + 
+                    "sections taught during the same quarter."
+                ), 
+
+                React.createElement("img", {src: "img/expandedTable.png", alt: "", className: "large-tutorial-image"}), 
+
+                React.createElement("p", null, 
+                    "Clicking on the triangle again will collapse the rows."
+                ), 
+
+                React.createElement("h2", null, "Hovering"), 
+                React.createElement("p", null, 
+                    "Hovering over an entry in the \"% Completed\" column will show the number of students who filled" + ' ' + 
+                    "out evaluations for that class as a fraction.  Hovering over all other column entries will show" + ' ' + 
+                    "the average department score for that column."
+                ), 
+
+                React.createElement("h2", null, "Pages"), 
+                React.createElement("p", null, 
+                    "Depending on how many search boxes you filled out, one of three pages will load. These pages are" + ' ' + 
+                    "similar, with a few important differences."
+                ), 
+                
+                React.createElement("h3", null, "Department Page"), 
+                React.createElement("p", null, 
+                    "If you specified only the name of the department, the department page will load. It shows all" + ' ' + 
+                    "courses offered by the specified department.  The top 5 courses and instructors in this" + ' ' + 
+                    "department are listed at the top of the page."
+                ), 
+
+                React.createElement("img", {src: "img/departmentPage.png", alt: "", className: "taller-tutorial-image"}), 
+
+                React.createElement("h3", null, "Course Page"), 
+                React.createElement("p", null, 
+                    "If you specified both the department name and course number, the course page will load. The" + ' ' + 
+                    "course page lists all instructors who have taught the specified course.  A line graph at the" + ' ' + 
+                    "top shows the overall rating for each instructor during different quarters.  A maximum of 5" + ' ' + 
+                    "instructors are shown on the graph."
+                ), 
+
+                React.createElement("img", {src: "img/coursePage.png", alt: "", className: "extra-taller-tutorial-image"}), 
+
+                React.createElement("h3", null, "Instructor Page"), 
+                React.createElement("p", null, 
+                    "If you specified only the name of the instructor, the instructor page will load. The instructor" + ' ' + 
+                    "page lists all courses taught by the specified instructor.   A line graph at the top shows the" + ' ' + 
+                    "overall rating for each of the courses taught by the instructor.  A maximum of 5 courses are" + ' ' + 
+                    "shown on the graph."
+                ), 
+
+                React.createElement("img", {src: "img/instructorPage.png", alt: "", className: "taller-tutorial-image"}), 
+
+                React.createElement("p", null, 
+                    "On both the course and instructor pages, the line graph displays the quarter on the X axis and" + ' ' + 
+                    "the overall rating on the Y axis.  Quarters for where there is no data point are left blank." + ' ' +  
+                    "Hovering over each dot displays its overall rating."
+                ), 
+
+                React.createElement("p", null, 
+                    "Clicking on a course code or instructor name in the table on any page will take you to the" + ' ' + 
+                    "corresponding course page or instructor page respectively."
+                ), 
+
+                React.createElement("h1", null, "Comparing Courses"), 
+                React.createElement("p", null, 
+                    "To compare courses, click on the \"Compare Courses\" button at the top of the page. This will take" + ' ' + 
+                    "you to a new page with two drop down boxes. The first allows you to specify a department, and the" + ' ' + 
+                    "second a course code. After you specify a department and course code, a table summarizing the" + ' ' + 
+                    "rating of the course will appear."
+                ), 
+                React.createElement("p", null, 
+                    "The + and - buttons on either side of the drop down boxes can be used to increase and decrease the" + ' ' + 
+                    "number of courses being compared respectively. The + button adds another set of drop down boxes," + ' ' + 
+                    "while the - button removes a set of drop down boxes. These drop down boxes can be used to specify" + ' ' + 
+                    "more courses."
+                ), 
+                
+                React.createElement("img", {src: "img/barchartSelection.png", alt: "Comparison page selection after selecting a class", className: "selection"}), 
+
+                React.createElement("p", null, 
+                    "Hovering over a bar will display the name of the course represented by the bar, as well as its" + ' ' + 
+                    "value. It will also display a black horizontal bar indicating the average rating of classes in" + ' ' + 
+                    "that department. For example, in the following picture the cursor is hovering over the bar" + ' ' + 
+                    "representing CSE 142. The black line indicates the average amount learned rating in the CSE" + ' ' + 
+                    "department.  More information on what each bar represents can be found in the legend next to the chart."
+                ), 
+                
+                React.createElement("img", {src: "img/barchartChart.png", alt: "Comparison page chart after selecting a class", className: "chart-final"}), 
+                React.createElement("img", {src: "img/barchartTable.png", alt: "Comparison page table after selecting a class", className: "chart-table"}), 
+
+                React.createElement("p", null, 
+                    "When a new course is specified, or an existing course is removed or modified, the" + ' ' + 
+                    "table and chart update automatically."
+                )
             )
         );
     }
@@ -1789,8 +2185,18 @@ var ValueBarComponent = React.createClass({displayName: "ValueBarComponent",
                      percent >= 60 ? "yellow" : "red")
                     : "disabled";
 
+        var hoverTitle = "";
+
+        if (this.props.total && this.props.completed) {
+            hoverTitle = this.props.completed + ' / ' + this.props.total + ' Students';
+        }
+
+        if (this.props.average) {
+            hoverTitle = this.props.average.department + " Average: " + this.props.average.value;
+        }
+
         return (
-            React.createElement("div", {className: "value-bar", title: (this.props.average ? this.props.average.department + " Average: " + this.props.average.value : "")}, 
+            React.createElement("div", {className: "value-bar", title: hoverTitle}, 
                 React.createElement("div", {className: "vb-bg " + level, style: {width : width}}
                 ), 
                 React.createElement("p", null, this.props.value ? this.props.value : "N/A")
