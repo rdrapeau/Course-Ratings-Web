@@ -90,19 +90,19 @@ var DataAPI = (function () {
             }
             if (course['the_course_as_a_whole']) {
                 output.push(course);
-            }
-            if (!(course['course_department'] in depAverages)) {
-                depAverages[course['course_department']] = {};
-                for (var j = 0; j < DataAPI.KEYS.length; j++) {
-                    depAverages[course['course_department']][DataAPI.KEYS[j]] = course[DataAPI.KEYS[j]];
+                if (!(course['course_department'] in depAverages)) {
+                    depAverages[course['course_department']] = {};
+                    for (var j = 0; j < DataAPI.KEYS.length; j++) {
+                        depAverages[course['course_department']][DataAPI.KEYS[j]] = course[DataAPI.KEYS[j]];
+                    }
+                    depAverages[course['course_department']]['length'] = 1.0;
                 }
-                depAverages[course['course_department']]['length'] = 1.0;
-            }
-            else {
-                for (var j = 0; j < DataAPI.KEYS.length; j++) {
-                    depAverages[course['course_department']][DataAPI.KEYS[j]] += course[DataAPI.KEYS[j]];
+                else {
+                    for (var j = 0; j < DataAPI.KEYS.length; j++) {
+                        depAverages[course['course_department']][DataAPI.KEYS[j]] += course[DataAPI.KEYS[j]];
+                    }
+                    depAverages[course['course_department']]['length'] += 1.0;
                 }
-                depAverages[course['course_department']]['length'] += 1.0;
             }
         }
         for (var department in depAverages) {
