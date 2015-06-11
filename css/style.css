@@ -415,7 +415,7 @@ button .glyphicon {
     display: block;
     margin: 0 auto;
     height: 600px;
-    width: 850px;
+    width: 400px;
 }
 
 .chart-table {
@@ -433,14 +433,18 @@ button .glyphicon {
 }
 
 #bar-svg {
-    width: 900px;
+    width: 492px;
 }
 
 .averages {
     display: none;
 }
-
+/*
 .value-bar:hover .averages {
+    display: block;
+}*/
+
+.rowComponent:hover .averages {
     display: block;
 }
 

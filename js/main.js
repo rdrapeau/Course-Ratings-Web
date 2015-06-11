@@ -33,6 +33,7 @@ var Constants = (function () {
         "% Completed": "percent_enrolled"
     };
     Constants.KEYS = ["the_course_as_a_whole", "the_course_content", "amount_learned", "instructors_effectiveness", "grading_techniques"];
+    Constants.BAR_KEYS = ["the_course_as_a_whole", "instructors_effectiveness", "grading_techniques"];
     Constants.KEY_TO_HEADER = {
         "course_whole_code": "Course Code",
         "professor": "Instructor",
@@ -495,8 +496,8 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
             return arr;
         }
 
-        var margin = { top: 20, right: 20, bottom: 30, left: 40 },
-            width = 900 - margin.left - margin.right,
+        var margin = { top: 20, right: 20, bottom: 30, left: 100 },
+            width = (800 - margin.left - margin.right) / 1.8,
             height = 550 - margin.top - margin.bottom;
 
         var x0 = d3.scale.ordinal()
@@ -558,9 +559,9 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
             .call(yAxis)
         .append("text")
             .attr("transform", "rotate(-90)")
-            .attr("y", 8 - margin.left)
+            .attr("y", 8 - margin.left + 60)
             .attr("x",0 - (height / 2))
-            .attr("dy", ".71em")
+            .attr("dy", ".1em")
             .style("text-anchor", "middle")
             .text("Rating");
 
@@ -592,18 +593,6 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
             svg.append("g").call(tip);
         }
 
-        dataAverage.forEach(function (kv) {
-            kv.value.forEach(function (d) {
-                d.col = kv.key;
-            });
-        });
-
-        data.forEach(function (kv) {
-            kv.value.forEach(function (d) {
-                d.col = kv.key;
-            });
-        });
-
         // Creating average bars
         svg.selectAll(".avg")
             .data(dataAverage)
@@ -617,9 +606,7 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
                     return d.value;
                 })
                 .enter().append("rect")
-                    .attr("class", function(d) {
-                        return d.col.concat(d.key);
-                    })
+                    .attr("class", "avgbar")
                     .attr("x", function(d) { 
                         return x1(d.key); 
                     })
@@ -661,11 +648,11 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
                     })
                     .on('mouseover', function(d){
                         tip.show(d);
-                        d3.selectAll("." + d.col.concat(d.key)).style("fill-opacity", 0.7);
+                        d3.selectAll(".avgbar").style("fill-opacity", 0.6);
                     })
                     .on('mouseout', function(d) {
                         tip.hide(d);
-                        d3.selectAll("." + d.col.concat(d.key)).style("fill-opacity", 0); 
+                        d3.selectAll(".avgbar").style("fill-opacity", 0); 
                     })
                     .style("fill-opacity", 0.0);
 
@@ -683,7 +670,7 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
             .style("fill", color);
 
         legend.append("text")
-            .attr("x", width - 24 + 30 - 100 + 15)
+            .attr("x", width  - 24 + 30 - 100 + 15)
             .attr("y", 9)
             .attr("dy", ".35em")
             .style("text-anchor", "start")
@@ -699,15 +686,15 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
                 .attr("transform", function (d, i) { return "translate(0," + i * 20 + ")"; });
 
             legend2.append("rect")
-                .attr("x", width - 18 - 100 + 15)
+                .attr("x", width  - 18 - 100 + 15)
                 .attr("y", padding * 20)
                 .attr("width", 18)
                 .attr("height", 5)
                 .style("fill", "black")
-                .style("fill-opacity", 0.7);;
+                .style("fill-opacity", 0.6);;
 
             legend2.append("text")
-                .attr("x", width - 24 + 30 - 100 + 15)
+                .attr("x", width  - 24 + 30 - 100 + 15)
                 .attr("y", 20 * padding + 6)
                 .style("text-anchor", "start")
                 .text(function (d) { return d; });
@@ -764,7 +751,7 @@ var ComparisonComponent = React.createClass({displayName: "ComparisonComponent",
             searchResults : [[]],
             departmentList : departmentList,
             courseLists : [[]],
-            compareKeys : Constants.KEYS
+            compareKeys : Constants.BAR_KEYS
         };
     },
 
@@ -1473,13 +1460,13 @@ var OverviewComponent = React.createClass({displayName: "OverviewComponent",
             multiplier *= -1;
         } else {
             // Reset to normal Ascending sort
-            multiplier = 1;
+            multiplier = -1;
         }
 
         if (domElement) {
             this.addArrowToHeader(domElement, multiplier);
         } else {
-            multiplier = 1;
+            multiplier = -1;
         }
 
         // Remember states
@@ -1750,7 +1737,7 @@ var OverviewCourseRowComponent = React.createClass({displayName: "OverviewCourse
         }
 
         return (
-            React.createElement("tr", {className: (data.hidden ? "hidden" : "") + (data.colorThis ? " existing-expanded" : "")}, 
+            React.createElement("tr", {className: "rowComponent" + (data.hidden ? " hidden" : "") + (data.colorThis ? " existing-expanded" : "")}, 
                 courseCodeRow, 
                 instructorRow, 
                 React.createElement("td", {className: "no-pad"}, React.createElement(ValueBarComponent, {average: {department : data.course_department, value : this.props.average.the_course_as_a_whole}, value: data.the_course_as_a_whole, max: 5})), 
@@ -2070,7 +2057,7 @@ var TutorialComponent = React.createClass({displayName: "TutorialComponent",
                       "The more search boxes you fill out, the more specific your search will be."
                 ), 
 
-                React.createElement("img", {src: "img/searchBoxes.png", alt: "", className: "tutorial-image"}), 
+                React.createElement("img", {src: "img/searchBoxes.png", alt: "search boxes", className: "tutorial-image"}), 
 
                 React.createElement("p", null, 
                     "To search for all courses at a specific level, for example all 100 level courses, a department" + ' ' +
@@ -2192,6 +2179,18 @@ var TutorialComponent = React.createClass({displayName: "TutorialComponent",
                 React.createElement("p", null, 
                     "When a new course is specified, or an existing course is removed or modified, the" + ' ' + 
                     "table and chart update automatically."
+                ), 
+
+                React.createElement("h1", null, "The Data"), 
+                React.createElement("p", null, 
+                    "At the end of every course, students fill out an evaluation for the instructor and the course as a whole." + ' ' +  
+                    "Students give a score between 0 - 5 for multiple dimensions including overall rating, grading technique" + ' ' + 
+                    "and effectiveness in teaching.  The median, the point where the data is evenly split with half of the data" + ' ' + 
+                    "falling above and half falling below, is calculated and can be accessed from the UW data.  Since simply" + ' ' + 
+                    "taking the median doesn", "'", "t best reflect the average score due to different sizes of subgroups," + ' ' + 
+                    "UW calculates the median in a slightly different manner.  More information on this can be found",  
+                    React.createElement("a", {href: "https://www.washington.edu/oea/services/course_eval/medians.html"}, " here"), "." + ' ' +  
+                    "Our site uses UW", "'", "s median for all calculations."
                 )
             )
         );
@@ -2237,7 +2236,8 @@ var ValueBarComponent = React.createClass({displayName: "ValueBarComponent",
                 'backgroundColor': 'black',
                 'marginLeft': marginPercent + '%',
                 'position' : 'relative',
-                'zIndex' : 100
+                'zIndex' : 100,
+                'opacity' : 0.7
             };
         }
 
