@@ -75,7 +75,7 @@ var DataAPI = (function () {
             course['datetime'] = year + DataAPI.TIME_TO_DATETIME[quarter];
             for (var j = 0; j < line.length; j++) {
                 if (!isNaN(Number(line[j])) && header[j] != "course_code") {
-                    course[header[j]] = Number(line[j]);
+                    course[header[j]] = Math.max(0, Number(line[j]));
                     if (header[j] != "completed" && header[j] != "total_enrolled") {
                         course[header[j]] = Math.min(5, Number(course[header[j]]));
                     }
@@ -160,51 +160,11 @@ var TutorialComponent = require('./TutorialComponent.jsx');
 var ComparisonComponent = require('./ComparisonComponent.jsx');
 
 /**
- * Encapsulates the entire application
+ * Encapsulates the entire application as a React class.
  */
 var AppComponent = React.createClass({displayName: "AppComponent",
-	/**
-	 * Returns a thunk that when executed will change the screen.
-	 */
-	setScreenLater : function(screen) {
-        var self = this;
-		return function() {
-			self.setState({active : screen});
-		};
-	},
-
     /**
-     * Called after this component mounts
-     */
-    componentDidMount : function() {
-        var self = this;
-
-        DataAPI.getTaffy(function(taffy, courses, depAverages) {
-            self.setState({allCourses : courses});
-            self.setState({taffy : taffy});
-            self.setState({depAverages : depAverages});
-        });
-    },
-
-    onClickCourse : function(course) {
-        var match_index = course.match(/\d/).index;
-        this.setState({activeCourse : course});
-        this.setState({activeCourseCode : course.substring(match_index)});
-        this.setState({activeDepartment : course.substring(0, match_index)});
-        this.setState({activeInstructor : null});
-        this.setScreenLater(Constants.SCREENS.COURSE_DETAILS)();
-    },
-
-    onClickInstructor : function(instructor) {
-        this.setState({activeInstructor : instructor});
-        this.setState({activeCourse : null});
-        this.setState({activeCourseCode : null});
-        this.setState({activeDepartment : null});
-        this.setScreenLater(Constants.SCREENS.INSTRUCTOR_DETAILS)();
-    },
-
-    /**
-     * Initalize the application, setting it to the home screen
+     * Initalize the application, setting it to the Overview page.
      */
     getInitialState : function() {
         return {
@@ -220,6 +180,67 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         };
     },
 
+    /**
+     * Switches the state of the screen.
+     *
+     * @param {Number} screen: The enum of the screen to switch to
+     * @return {Function} A thunk that when executed will change the screen
+     */
+	setScreenLater : function(screen) {
+        var self = this;
+		return function() {
+			self.setState({active : screen});
+		};
+	},
+
+    /**
+     * After this component mounts, get the data from Taffy.
+     */
+    componentDidMount : function() {
+        var self = this;
+
+        DataAPI.getTaffy(function(taffy, courses, depAverages) {
+            self.setState({allCourses : courses});
+            self.setState({taffy : taffy});
+            self.setState({depAverages : depAverages});
+        });
+    },
+
+    /**
+     * Switches the active course and switches the screen to be the Course Details page.
+     *
+     * @param  {String} course: The full course code (ex. CSE142) of the course that was clicked
+     */
+    onClickCourse : function(course) {
+        var match_index = course.match(/\d/).index;
+        this.setState({activeCourse : course});
+        this.setState({activeCourseCode : course.substring(match_index)});
+        this.setState({activeDepartment : course.substring(0, match_index)});
+        this.setState({activeInstructor : null});
+        this.setScreenLater(Constants.SCREENS.COURSE_DETAILS)();
+    },
+
+    /**
+     * Switches the active instructor and switches the screen to be the Instructor Details page.
+     *
+     * @param  {String} instructor: The full name of the instructor that was clicked
+     */
+    onClickInstructor : function(instructor) {
+        this.setState({activeInstructor : instructor});
+        this.setState({activeCourse : null});
+        this.setState({activeCourseCode : null});
+        this.setState({activeDepartment : null});
+        this.setScreenLater(Constants.SCREENS.INSTRUCTOR_DETAILS)();
+    },
+
+    /**
+     * Performs a query on the data for the given fields (omit by passing false for a field).
+     *
+     * @param  {String} course_department: The course department to query (ex. CSE)
+     * @param  {Number} course_code: The course code to query (ex. 142)
+     * @param  {String} professor: The professor to query (ex. Stuart Reges)
+     * @return {Array} The course objects that match the query.
+     */
     getSearchResult : function(course_department, course_code, professor) {
         var results = [];
         var originalCourseCode = course_code;
@@ -273,11 +294,13 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         }
 
         if (!course_department && !course_code && !professor) {
+            // None specified so reset the page back to the start
             this.resetPage();
-        } else {
-            this.setState({current_courses : results});
+            return [];
         }
 
+        // Otherwise update the current courses
+        this.setState({current_courses : results});
         this.setState({activeDepartment : course_department});
         this.setState({activeCourseCode : originalCourseCode});
         this.setState({activeInstructor : professor});
@@ -297,6 +320,9 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         return results;
     },
 
+    /**
+     * Resets the page back to its initial state (empty on the Overview page).
+     */
     resetPage : function() {
         this.setState({current_courses : []});
         this.setState({activeDepartment : null});
@@ -307,7 +333,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
     },
 
     /**
-     * Render the application
+     * Render the application.
      */
     render : function() {
         var self = this;
@@ -407,7 +433,7 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
             var coursesToCounts = {};
 
             // Merge averages
-            for(var i = 0; i < data.length; i++) {
+            for (var i = 0; i < data.length; i++) {
                 var dataPoint = data[i];
 
                 var ratings = coursesToRatings[dataPoint.course_whole_code];
@@ -576,17 +602,17 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
             .data(function (d) { return d.value; })
         .enter().append("rect")
             .attr("width", x1.rangeBand())
-            .attr("x", function (d) { 
-                return x1(d.key); 
+            .attr("x", function (d) {
+                return x1(d.key);
             })
-            .attr("y", function (d) { 
-                return y(d.value); 
+            .attr("y", function (d) {
+                return y(d.value);
             })
-            .attr("height", function (d) { 
-                return height - y(d.value); 
+            .attr("height", function (d) {
+                return height - y(d.value);
             })
-            .style("fill", function (d) { 
-                return color(d.key); 
+            .style("fill", function (d) {
+                return color(d.key);
             });
 
         if (svg.node() != null) {
@@ -598,8 +624,8 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
             .data(dataAverage)
             .enter().append("g")
                 .attr("class", "g")
-                .attr("transform", function (d) { 
-                    return "translate(" + x0(d.key) + ",0)"; 
+                .attr("transform", function (d) {
+                    return "translate(" + x0(d.key) + ",0)";
                 })
                 .selectAll("rect")
                 .data(function(d) {
@@ -607,18 +633,18 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
                 })
                 .enter().append("rect")
                     .attr("class", "avgbar")
-                    .attr("x", function(d) { 
-                        return x1(d.key); 
+                    .attr("x", function(d) {
+                        return x1(d.key);
                     })
                     .attr("width", x1.rangeBand())
-                    .attr("y", function(d) { 
-                        return y(d.value); 
+                    .attr("y", function(d) {
+                        return y(d.value);
                     })
-                    .attr("height", function(d) { 
-                        return 5; 
+                    .attr("height", function(d) {
+                        return 5;
                     })
-                    .style("fill", function (d) { 
-                        return "black"; 
+                    .style("fill", function (d) {
+                        return "black";
                     })
                     .style("fill-opacity", 0.0);
 
@@ -627,8 +653,8 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
             .data(data)
             .enter().append("g")
                 .attr("class", "g")
-                .attr("transform", function (d) { 
-                    return "translate(" + x0(d.key) + ",0)"; 
+                .attr("transform", function (d) {
+                    return "translate(" + x0(d.key) + ",0)";
                 })
                 .selectAll("rect")
                 .data(function(d) {
@@ -636,15 +662,15 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
                 })
                 .enter().append("rect")
                     .attr("class", "hover")
-                    .attr("x", function(d) { 
-                        return x1(d.key); 
+                    .attr("x", function(d) {
+                        return x1(d.key);
                     })
                     .attr("width", x1.rangeBand())
-                    .attr("y", function(d) { 
-                        return y(5); 
+                    .attr("y", function(d) {
+                        return y(5);
                     })
-                    .attr("height", function(d) { 
-                        return height - y(5); 
+                    .attr("height", function(d) {
+                        return height - y(5);
                     })
                     .on('mouseover', function(d){
                         tip.show(d);
@@ -652,7 +678,7 @@ var BarChartComponent = React.createClass({displayName: "BarChartComponent",
                     })
                     .on('mouseout', function(d) {
                         tip.hide(d);
-                        d3.selectAll(".avgbar").style("fill-opacity", 0); 
+                        d3.selectAll(".avgbar").style("fill-opacity", 0);
                     })
                     .style("fill-opacity", 0.0);
 
@@ -3840,14 +3866,14 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 },{}],21:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
-  var e, m,
-      eLen = nBytes * 8 - mLen - 1,
-      eMax = (1 << eLen) - 1,
-      eBias = eMax >> 1,
-      nBits = -7,
-      i = isLE ? (nBytes - 1) : 0,
-      d = isLE ? -1 : 1,
-      s = buffer[offset + i]
+  var e, m
+  var eLen = nBytes * 8 - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var nBits = -7
+  var i = isLE ? (nBytes - 1) : 0
+  var d = isLE ? -1 : 1
+  var s = buffer[offset + i]
 
   i += d
 
@@ -3873,14 +3899,14 @@ exports.read = function (buffer, offset, isLE, mLen, nBytes) {
 }
 
 exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
-  var e, m, c,
-      eLen = nBytes * 8 - mLen - 1,
-      eMax = (1 << eLen) - 1,
-      eBias = eMax >> 1,
-      rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0),
-      i = isLE ? 0 : (nBytes - 1),
-      d = isLE ? 1 : -1,
-      s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
+  var e, m, c
+  var eLen = nBytes * 8 - mLen - 1
+  var eMax = (1 << eLen) - 1
+  var eBias = eMax >> 1
+  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
+  var i = isLE ? 0 : (nBytes - 1)
+  var d = isLE ? 1 : -1
+  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0
 
   value = Math.abs(value)
 
@@ -25715,6 +25741,7 @@ var pako = {};
 assign(pako, deflate, inflate, constants);
 
 module.exports = pako;
+
 },{"./lib/deflate":52,"./lib/inflate":53,"./lib/utils/common":54,"./lib/zlib/constants":57}],52:[function(require,module,exports){
 'use strict';
 
@@ -25735,6 +25762,7 @@ var Z_FINISH        = 4;
 
 var Z_OK            = 0;
 var Z_STREAM_END    = 1;
+var Z_SYNC_FLUSH    = 2;
 
 var Z_DEFAULT_COMPRESSION = -1;
 
@@ -25764,7 +25792,9 @@ var Z_DEFLATED  = 8;
  *
  * Compressed result, generated by default [[Deflate#onData]]
  * and [[Deflate#onEnd]] handlers. Filled after you push last chunk
- * (call [[Deflate#push]] with `Z_FINISH` / `true` param).
+ * (call [[Deflate#push]] with `Z_FINISH` / `true` param)  or if you
+ * push a chunk with explicit flush (call [[Deflate#push]] with
+ * `Z_SYNC_FLUSH` param).
  **/
 
 /**
@@ -25888,8 +25918,9 @@ var Deflate = function(options) {
  *
  * Sends input data to deflate pipe, generating [[Deflate#onData]] calls with
  * new compressed chunks. Returns `true` on success. The last data block must have
- * mode Z_FINISH (or `true`). That flush internal pending buffers and call
- * [[Deflate#onEnd]].
+ * mode Z_FINISH (or `true`). That will flush internal pending buffers and call
+ * [[Deflate#onEnd]]. For interim explicit flushes (without ending the stream) you
+ * can use mode Z_SYNC_FLUSH, keeping the compression context.
  *
  * On fail call [[Deflate#onEnd]] with error code and return false.
  *
@@ -25942,7 +25973,7 @@ Deflate.prototype.push = function(data, mode) {
       this.ended = true;
       return false;
     }
-    if (strm.avail_out === 0 || (strm.avail_in === 0 && _mode === Z_FINISH)) {
+    if (strm.avail_out === 0 || (strm.avail_in === 0 && (_mode === Z_FINISH || _mode === Z_SYNC_FLUSH))) {
       if (this.options.to === 'string') {
         this.onData(strings.buf2binstring(utils.shrinkBuf(strm.output, strm.next_out)));
       } else {
@@ -25957,6 +25988,13 @@ Deflate.prototype.push = function(data, mode) {
     this.onEnd(status);
     this.ended = true;
     return status === Z_OK;
+  }
+
+  // callback interim results if Z_SYNC_FLUSH.
+  if (_mode === Z_SYNC_FLUSH) {
+    this.onEnd(Z_OK);
+    strm.avail_out = 0;
+    return true;
   }
 
   return true;
@@ -25982,8 +26020,9 @@ Deflate.prototype.onData = function(chunk) {
  * - status (Number): deflate status. 0 (Z_OK) on success,
  *   other if not.
  *
- * Called once after you tell deflate that input stream complete
- * or error happenned. By default - join collected chunks,
+ * Called once after you tell deflate that the input stream is
+ * complete (Z_FINISH) or should be flushed (Z_SYNC_FLUSH)
+ * or if an error happened. By default - join collected chunks,
  * free memory and fill `results` / `err` properties.
  **/
 Deflate.prototype.onEnd = function(status) {
@@ -26080,6 +26119,7 @@ exports.Deflate = Deflate;
 exports.deflate = deflate;
 exports.deflateRaw = deflateRaw;
 exports.gzip = gzip;
+
 },{"./utils/common":54,"./utils/strings":55,"./zlib/deflate.js":59,"./zlib/messages":64,"./zlib/zstream":66}],53:[function(require,module,exports){
 'use strict';
 
@@ -26113,7 +26153,9 @@ var toString = Object.prototype.toString;
  *
  * Uncompressed result, generated by default [[Inflate#onData]]
  * and [[Inflate#onEnd]] handlers. Filled after you push last chunk
- * (call [[Inflate#push]] with `Z_FINISH` / `true` param).
+ * (call [[Inflate#push]] with `Z_FINISH` / `true` param) or if you
+ * push a chunk with explicit flush (call [[Inflate#push]] with
+ * `Z_SYNC_FLUSH` param).
  **/
 
 /**
@@ -26233,8 +26275,9 @@ var Inflate = function(options) {
  *
  * Sends input data to inflate pipe, generating [[Inflate#onData]] calls with
  * new output chunks. Returns `true` on success. The last data block must have
- * mode Z_FINISH (or `true`). That flush internal pending buffers and call
- * [[Inflate#onEnd]].
+ * mode Z_FINISH (or `true`). That will flush internal pending buffers and call
+ * [[Inflate#onEnd]]. For interim explicit flushes (without ending the stream) you
+ * can use mode Z_SYNC_FLUSH, keeping the decompression context.
  *
  * On fail call [[Inflate#onEnd]] with error code and return false.
  *
@@ -26290,7 +26333,7 @@ Inflate.prototype.push = function(data, mode) {
     }
 
     if (strm.next_out) {
-      if (strm.avail_out === 0 || status === c.Z_STREAM_END || (strm.avail_in === 0 && _mode === c.Z_FINISH)) {
+      if (strm.avail_out === 0 || status === c.Z_STREAM_END || (strm.avail_in === 0 && (_mode === c.Z_FINISH || _mode === c.Z_SYNC_FLUSH))) {
 
         if (this.options.to === 'string') {
 
@@ -26316,12 +26359,20 @@ Inflate.prototype.push = function(data, mode) {
   if (status === c.Z_STREAM_END) {
     _mode = c.Z_FINISH;
   }
+
   // Finalize on the last chunk.
   if (_mode === c.Z_FINISH) {
     status = zlib_inflate.inflateEnd(this.strm);
     this.onEnd(status);
     this.ended = true;
     return status === c.Z_OK;
+  }
+
+  // callback interim results if Z_SYNC_FLUSH.
+  if (_mode === c.Z_SYNC_FLUSH) {
+    this.onEnd(c.Z_OK);
+    strm.avail_out = 0;
+    return true;
   }
 
   return true;
@@ -26347,8 +26398,9 @@ Inflate.prototype.onData = function(chunk) {
  * - status (Number): inflate status. 0 (Z_OK) on success,
  *   other if not.
  *
- * Called once after you tell inflate that input stream complete
- * or error happenned. By default - join collected chunks,
+ * Called either after you tell inflate that the input stream is
+ * complete (Z_FINISH) or should be flushed (Z_SYNC_FLUSH)
+ * or if an error happened. By default - join collected chunks,
  * free memory and fill `results` / `err` properties.
  **/
 Inflate.prototype.onEnd = function(status) {
@@ -26464,7 +26516,7 @@ exports.assign = function (obj /*from1, from2, from3, ...*/) {
     var source = sources.shift();
     if (!source) { continue; }
 
-    if (typeof(source) !== 'object') {
+    if (typeof source !== 'object') {
       throw new TypeError(source + 'must be non-object');
     }
 
@@ -26495,7 +26547,7 @@ var fnTyped = {
       return;
     }
     // Fallback to ordinary array
-    for(var i=0; i<len; i++) {
+    for (var i=0; i<len; i++) {
       dest[dest_offs + i] = src[src_offs + i];
     }
   },
@@ -26524,7 +26576,7 @@ var fnTyped = {
 
 var fnUntyped = {
   arraySet: function (dest, src, src_offs, len, dest_offs) {
-    for(var i=0; i<len; i++) {
+    for (var i=0; i<len; i++) {
       dest[dest_offs + i] = src[src_offs + i];
     }
   },
@@ -26552,6 +26604,7 @@ exports.setTyped = function (on) {
 };
 
 exports.setTyped(TYPED_OK);
+
 },{}],55:[function(require,module,exports){
 // String encode/decode helpers
 'use strict';
@@ -26576,8 +26629,8 @@ try { String.fromCharCode.apply(null, new Uint8Array(1)); } catch(__) { STR_APPL
 // Note, that 5 & 6-byte values and some 4-byte values can not be represented in JS,
 // because max possible codepoint is 0x10ffff
 var _utf8len = new utils.Buf8(256);
-for (var i=0; i<256; i++) {
-  _utf8len[i] = (i >= 252 ? 6 : i >= 248 ? 5 : i >= 240 ? 4 : i >= 224 ? 3 : i >= 192 ? 2 : 1);
+for (var q=0; q<256; q++) {
+  _utf8len[q] = (q >= 252 ? 6 : q >= 248 ? 5 : q >= 240 ? 4 : q >= 224 ? 3 : q >= 192 ? 2 : 1);
 }
 _utf8len[254]=_utf8len[254]=1; // Invalid sequence start
 
@@ -26646,7 +26699,7 @@ function buf2binstring(buf, len) {
   }
 
   var result = '';
-  for(var i=0; i < len; i++) {
+  for (var i=0; i < len; i++) {
     result += String.fromCharCode(buf[i]);
   }
   return result;
@@ -26662,7 +26715,7 @@ exports.buf2binstring = function(buf) {
 // Convert binary string (typed, when possible)
 exports.binstring2buf = function(str) {
   var buf = new utils.Buf8(str.length);
-  for(var i=0, len=buf.length; i < len; i++) {
+  for (var i=0, len=buf.length; i < len; i++) {
     buf[i] = str.charCodeAt(i);
   }
   return buf;
@@ -26747,9 +26800,9 @@ exports.utf8border = function(buf, max) {
 // Small size is preferable.
 
 function adler32(adler, buf, len, pos) {
-  var s1 = (adler & 0xffff) |0
-    , s2 = ((adler >>> 16) & 0xffff) |0
-    , n = 0;
+  var s1 = (adler & 0xffff) |0,
+      s2 = ((adler >>> 16) & 0xffff) |0,
+      n = 0;
 
   while (len !== 0) {
     // Set limit ~ twice less than 5552, to keep
@@ -26772,6 +26825,7 @@ function adler32(adler, buf, len, pos) {
 
 
 module.exports = adler32;
+
 },{}],57:[function(require,module,exports){
 module.exports = {
 
@@ -26820,6 +26874,7 @@ module.exports = {
   Z_DEFLATED:               8
   //Z_NULL:                 null // Use -1 or null inline, depending on var type
 };
+
 },{}],58:[function(require,module,exports){
 'use strict';
 
@@ -26832,9 +26887,9 @@ module.exports = {
 function makeTable() {
   var c, table = [];
 
-  for(var n =0; n < 256; n++){
+  for (var n =0; n < 256; n++) {
     c = n;
-    for(var k =0; k < 8; k++){
+    for (var k =0; k < 8; k++) {
       c = ((c&1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
     }
     table[n] = c;
@@ -26848,12 +26903,12 @@ var crcTable = makeTable();
 
 
 function crc32(crc, buf, len, pos) {
-  var t = crcTable
-    , end = pos + len;
+  var t = crcTable,
+      end = pos + len;
 
   crc = crc ^ (-1);
 
-  for (var i = pos; i < end; i++ ) {
+  for (var i = pos; i < end; i++) {
     crc = (crc >>> 8) ^ t[(crc ^ buf[i]) & 0xFF];
   }
 
@@ -26862,6 +26917,7 @@ function crc32(crc, buf, len, pos) {
 
 
 module.exports = crc32;
+
 },{}],59:[function(require,module,exports){
 'use strict';
 
@@ -28399,7 +28455,7 @@ function deflate(strm, flush) {
         put_byte(s, val);
       } while (val !== 0);
 
-      if (s.gzhead.hcrc && s.pending > beg){
+      if (s.gzhead.hcrc && s.pending > beg) {
         strm.adler = crc32(strm.adler, s.pending_buf, s.pending - beg, beg);
       }
       if (val === 0) {
@@ -28628,6 +28684,7 @@ exports.deflatePending = deflatePending;
 exports.deflatePrime = deflatePrime;
 exports.deflateTune = deflateTune;
 */
+
 },{"../utils/common":54,"./adler32":56,"./crc32":58,"./messages":64,"./trees":65}],60:[function(require,module,exports){
 'use strict';
 
@@ -28648,7 +28705,7 @@ function GZheader() {
                        // but leave for few code modifications
 
   //
-  // Setup limits is not necessary because in js we should not preallocate memory 
+  // Setup limits is not necessary because in js we should not preallocate memory
   // for inflate use constant limit in 65536 bytes
   //
 
@@ -28669,6 +28726,7 @@ function GZheader() {
 }
 
 module.exports = GZheader;
+
 },{}],61:[function(require,module,exports){
 'use strict';
 
@@ -30500,6 +30558,7 @@ exports.inflateSync = inflateSync;
 exports.inflateSyncPoint = inflateSyncPoint;
 exports.inflateUndermine = inflateUndermine;
 */
+
 },{"../utils/common":54,"./adler32":56,"./crc32":58,"./inffast":61,"./inftrees":63}],63:[function(require,module,exports){
 'use strict';
 
@@ -30697,18 +30756,20 @@ module.exports = function inflate_table(type, lens, lens_index, codes, table, ta
   // poor man optimization - use if-else instead of switch,
   // to avoid deopts in old v8
   if (type === CODES) {
-      base = extra = work;    /* dummy value--not used */
-      end = 19;
+    base = extra = work;    /* dummy value--not used */
+    end = 19;
+
   } else if (type === LENS) {
-      base = lbase;
-      base_index -= 257;
-      extra = lext;
-      extra_index -= 257;
-      end = 256;
+    base = lbase;
+    base_index -= 257;
+    extra = lext;
+    extra_index -= 257;
+    end = 256;
+
   } else {                    /* DISTS */
-      base = dbase;
-      extra = dext;
-      end = -1;
+    base = dbase;
+    extra = dext;
+    end = -1;
   }
 
   /* initialize opts for loop */
@@ -30841,6 +30902,7 @@ module.exports = {
   '-5':   'buffer error',        /* Z_BUF_ERROR     (-5) */
   '-6':   'incompatible version' /* Z_VERSION_ERROR (-6) */
 };
+
 },{}],65:[function(require,module,exports){
 'use strict';
 
@@ -31275,7 +31337,7 @@ function tr_static_init() {
   }
   //Assert (dist == 256, "tr_static_init: dist != 256");
   dist >>= 7; /* from now on, all distances are divided by 128 */
-  for ( ; code < D_CODES; code++) {
+  for (; code < D_CODES; code++) {
     base_dist[code] = dist << 7;
     for (n = 0; n < (1<<(extra_dbits[code]-7)); n++) {
       _dist_code[256 + dist++] = code;
@@ -32041,6 +32103,7 @@ exports._tr_stored_block = _tr_stored_block;
 exports._tr_flush_block  = _tr_flush_block;
 exports._tr_tally = _tr_tally;
 exports._tr_align = _tr_align;
+
 },{"../utils/common":54}],66:[function(require,module,exports){
 'use strict';
 
@@ -32071,6 +32134,7 @@ function ZStream() {
 }
 
 module.exports = ZStream;
+
 },{}],67:[function(require,module,exports){
 'use strict';
 
@@ -32081,7 +32145,6 @@ var React = require('react');
 var sizerStyle = { position: 'absolute', visibility: 'hidden', height: 0, width: 0, overflow: 'scroll', whiteSpace: 'nowrap' };
 
 var AutosizeInput = React.createClass({
-
 	displayName: 'AutosizeInput',
 
 	propTypes: {
@@ -32095,28 +32158,23 @@ var AutosizeInput = React.createClass({
 		inputStyle: React.PropTypes.object, // css styles for the input element
 		inputClassName: React.PropTypes.string // className for the input element
 	},
-
 	getDefaultProps: function getDefaultProps() {
 		return {
 			minWidth: 1
 		};
 	},
-
 	getInitialState: function getInitialState() {
 		return {
 			inputWidth: this.props.minWidth
 		};
 	},
-
 	componentDidMount: function componentDidMount() {
 		this.copyInputStyles();
 		this.updateInputWidth();
 	},
-
 	componentDidUpdate: function componentDidUpdate() {
 		this.updateInputWidth();
 	},
-
 	copyInputStyles: function copyInputStyles() {
 		if (!this.isMounted() || !window.getComputedStyle) {
 			return;
@@ -32131,7 +32189,6 @@ var AutosizeInput = React.createClass({
 			placeholderNode.style.fontFamily = inputStyle.fontFamily;
 		}
 	},
-
 	updateInputWidth: function updateInputWidth() {
 		if (!this.isMounted() || typeof this.refs.sizer.getDOMNode().scrollWidth === 'undefined') {
 			return;
@@ -32151,48 +32208,42 @@ var AutosizeInput = React.createClass({
 			});
 		}
 	},
-
 	getInput: function getInput() {
 		return this.refs.input;
 	},
-
 	focus: function focus() {
 		this.refs.input.getDOMNode().focus();
 	},
-
 	select: function select() {
 		this.refs.input.getDOMNode().select();
 	},
-
 	render: function render() {
-
-		var nbspValue = (this.props.value || '').replace(/ /g, '&nbsp;');
-
+		var escapedValue = (this.props.value || '').replace(/ /g, '&nbsp;').replace(/\</g, '&lt;').replace(/\>/g, '&gt;');
 		var wrapperStyle = this.props.style || {};
 		wrapperStyle.display = 'inline-block';
-
 		var inputStyle = this.props.inputStyle || {};
 		inputStyle.width = this.state.inputWidth;
-
 		var placeholder = this.props.placeholder ? React.createElement(
 			'div',
 			{ ref: 'placeholderSizer', style: sizerStyle },
 			this.props.placeholder
 		) : null;
-
 		return React.createElement(
 			'div',
 			{ className: this.props.className, style: wrapperStyle },
 			React.createElement('input', _extends({}, this.props, { ref: 'input', className: this.props.inputClassName, style: inputStyle })),
-			React.createElement('div', { ref: 'sizer', style: sizerStyle, dangerouslySetInnerHTML: { __html: nbspValue } }),
+			React.createElement('div', { ref: 'sizer', style: sizerStyle, dangerouslySetInnerHTML: { __html: escapedValue } }),
 			placeholder
 		);
 	}
-
 });
 
 module.exports = AutosizeInput;
 },{"react":249}],68:[function(require,module,exports){
+/* disable some rules until we refactor more completely; fixing them now would
+   cause conflicts with some open PRs unnecessarily. */
+/* eslint react/jsx-sort-prop-types: 0, react/sort-comp: 0, react/prop-types: 0 */
+
 'use strict';
 
 var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
@@ -32209,64 +32260,61 @@ var Select = React.createClass({
 	displayName: 'Select',
 
 	propTypes: {
-		value: React.PropTypes.any, // initial field value
-		multi: React.PropTypes.bool, // multi-value input
-		disabled: React.PropTypes.bool, // whether the Select is disabled or not
-		options: React.PropTypes.array, // array of options
-		delimiter: React.PropTypes.string, // delimiter to use to join multiple values
+		allowCreate: React.PropTypes.bool, // wether to allow creation of new entries
 		asyncOptions: React.PropTypes.func, // function to call to get options
 		autoload: React.PropTypes.bool, // whether to auto-load the default async options set
-		placeholder: React.PropTypes.string, // field placeholder, displayed when there's no value
-		noResultsText: React.PropTypes.string, // placeholder displayed when there are no matching search results
-		clearable: React.PropTypes.bool, // should it be possible to reset value
-		clearValueText: React.PropTypes.string, // title for the "clear" control
-		clearAllText: React.PropTypes.string, // title for the "clear" control when multi: true
-		searchable: React.PropTypes.bool, // whether to enable searching feature or not
-		searchPromptText: React.PropTypes.string, // label to prompt for search input
-		name: React.PropTypes.string, // field name, for hidden <input /> tag
-		onChange: React.PropTypes.func, // onChange handler: function(newValue) {}
-		onFocus: React.PropTypes.func, // onFocus handler: function(event) {}
-		onBlur: React.PropTypes.func, // onBlur handler: function(event) {}
 		className: React.PropTypes.string, // className for the outer element
+		clearable: React.PropTypes.bool, // should it be possible to reset value
+		clearAllText: React.PropTypes.string, // title for the "clear" control when multi: true
+		clearValueText: React.PropTypes.string, // title for the "clear" control
+		delimiter: React.PropTypes.string, // delimiter to use to join multiple values
+		disabled: React.PropTypes.bool, // whether the Select is disabled or not
 		filterOption: React.PropTypes.func, // method to filter a single option: function(option, filterString)
 		filterOptions: React.PropTypes.func, // method to filter the options array: function([options], filterString, [values])
+		ignoreCase: React.PropTypes.bool, // whether to perform case-insensitive filtering
+		inputProps: React.PropTypes.object, // custom attributes for the Input (in the Select-control) e.g: {'data-foo': 'bar'}
 		matchPos: React.PropTypes.string, // (any|start) match the start or entire string when filtering
 		matchProp: React.PropTypes.string, // (any|label|value) which option property to filter on
-		inputProps: React.PropTypes.object, // custom attributes for the Input (in the Select-control) e.g: {'data-foo': 'bar'}
-
-		/*
-  * Allow user to make option label clickable. When this handler is defined we should
-  * wrap label into <a>label</a> tag.
-  *
-  * onOptionLabelClick handler: function (value, event) {}
-  *
-  */
-		onOptionLabelClick: React.PropTypes.func
+		multi: React.PropTypes.bool, // multi-value input
+		name: React.PropTypes.string, // field name, for hidden <input /> tag
+		noResultsText: React.PropTypes.string, // placeholder displayed when there are no matching search results
+		onBlur: React.PropTypes.func, // onBlur handler: function(event) {}
+		onChange: React.PropTypes.func, // onChange handler: function(newValue) {}
+		onFocus: React.PropTypes.func, // onFocus handler: function(event) {}
+		onOptionLabelClick: React.PropTypes.func, // onCLick handler for value labels: function (value, event) {}
+		optionRenderer: React.PropTypes.func, // optionRenderer: function(option) {}
+		options: React.PropTypes.array, // array of options
+		placeholder: React.PropTypes.string, // field placeholder, displayed when there's no value
+		searchable: React.PropTypes.bool, // whether to enable searching feature or not
+		searchPromptText: React.PropTypes.string, // label to prompt for search input
+		value: React.PropTypes.any, // initial field value
+		valueRenderer: React.PropTypes.func // valueRenderer: function(option) {}
 	},
 
 	getDefaultProps: function getDefaultProps() {
 		return {
-			value: undefined,
-			options: undefined,
-			disabled: false,
-			delimiter: ',',
+			allowCreate: false,
 			asyncOptions: undefined,
 			autoload: true,
-			placeholder: 'Select...',
-			noResultsText: 'No results found',
-			clearable: true,
-			clearValueText: 'Clear value',
-			clearAllText: 'Clear all',
-			searchable: true,
-			searchPromptText: 'Type to search',
-			name: undefined,
-			onChange: undefined,
 			className: undefined,
+			clearable: true,
+			clearAllText: 'Clear all',
+			clearValueText: 'Clear value',
+			delimiter: ',',
+			disabled: false,
+			ignoreCase: true,
+			inputProps: {},
 			matchPos: 'any',
 			matchProp: 'any',
-			inputProps: {},
-
-			onOptionLabelClick: undefined
+			name: undefined,
+			noResultsText: 'No results found',
+			onChange: undefined,
+			onOptionLabelClick: undefined,
+			options: undefined,
+			placeholder: 'Select...',
+			searchable: true,
+			searchPromptText: 'Type to search',
+			value: undefined
 		};
 	},
 
@@ -32281,21 +32329,16 @@ var Select = React.createClass({
     * - placeholder
     * - focusedOption
    */
-			options: this.props.options,
 			isFocused: false,
+			isLoading: false,
 			isOpen: false,
-			isLoading: false
+			options: this.props.options
 		};
 	},
 
 	componentWillMount: function componentWillMount() {
 		this._optionsCache = {};
 		this._optionsFilterString = '';
-		this.setState(this.getStateFromValue(this.props.value));
-
-		if (this.props.asyncOptions && this.props.autoload) {
-			this.autoloadAsyncOptions();
-		}
 
 		var self = this;
 		this._closeMenuIfClickedOutside = function (event) {
@@ -32317,12 +32360,27 @@ var Select = React.createClass({
 		};
 
 		this._bindCloseMenuIfClickedOutside = function () {
-			document.addEventListener('click', self._closeMenuIfClickedOutside);
+			if (!document.addEventListener && document.attachEvent) {
+				document.attachEvent('onclick', this._closeMenuIfClickedOutside);
+			} else {
+				document.addEventListener('click', this._closeMenuIfClickedOutside);
+			}
 		};
 
 		this._unbindCloseMenuIfClickedOutside = function () {
-			document.removeEventListener('click', self._closeMenuIfClickedOutside);
+			if (!document.removeEventListener && document.detachEvent) {
+				document.detachEvent('onclick', this._closeMenuIfClickedOutside);
+			} else {
+				document.removeEventListener('click', this._closeMenuIfClickedOutside);
+			}
 		};
+
+		this.setState(this.getStateFromValue(this.props.value), function () {
+			//Executes after state change is done. Fixes issue #201
+			if (this.props.asyncOptions && this.props.autoload) {
+				this.autoloadAsyncOptions();
+			}
+		});
 	},
 
 	componentWillUnmount: function componentWillUnmount() {
@@ -32413,7 +32471,7 @@ var Select = React.createClass({
 	initValuesArray: function initValuesArray(values, options) {
 		if (!Array.isArray(values)) {
 			if (typeof values === 'string') {
-				values = values.split(this.props.delimiter);
+				values = values === '' ? [] : values.split(this.props.delimiter);
 			} else {
 				values = values ? [values] : [];
 			}
@@ -32472,11 +32530,13 @@ var Select = React.createClass({
 		if (event && event.type === 'mousedown' && event.button !== 0) {
 			return;
 		}
+		event.stopPropagation();
+		event.preventDefault();
 		this.setValue(null);
 	},
 
 	resetValue: function resetValue() {
-		this.setValue(this.state.value);
+		this.setValue(this.state.value === '' ? null : this.state.value);
 	},
 
 	getInputNode: function getInputNode() {
@@ -32507,6 +32567,24 @@ var Select = React.createClass({
 			this._openAfterFocus = true;
 			this.getInputNode().focus();
 		}
+	},
+
+	handleMouseDownOnArrow: function handleMouseDownOnArrow(event) {
+		// if the event was triggered by a mousedown and not the primary
+		// button, or if the component is disabled, ignore it.
+		if (this.props.disabled || event.type === 'mousedown' && event.button !== 0) {
+			return;
+		}
+		// If not focused, handleMouseDown will handle it
+		if (!this.state.isOpen) {
+			return;
+		}
+
+		event.stopPropagation();
+		event.preventDefault();
+		this.setState({
+			isOpen: false
+		}, this._unbindCloseMenuIfClickedOutside);
 	},
 
 	handleInputFocus: function handleInputFocus(event) {
@@ -32566,6 +32644,8 @@ var Select = React.createClass({
 
 			case 13:
 				// enter
+				if (!this.state.isOpen) return;
+
 				this.selectFocusedOption();
 				break;
 
@@ -32586,6 +32666,17 @@ var Select = React.createClass({
 			case 40:
 				// down
 				this.focusNextOption();
+				break;
+
+			case 188:
+				// ,
+				if (this.props.allowCreate) {
+					event.preventDefault();
+					event.stopPropagation();
+					this.selectFocusedOption();
+				} else {
+					return;
+				}
 				break;
 
 			default:
@@ -32659,7 +32750,7 @@ var Select = React.createClass({
 					}
 				}
 				this.setState(newState);
-				if (callback) callback({});
+				if (callback) callback.call(this, {});
 				return;
 			}
 		}
@@ -32688,7 +32779,7 @@ var Select = React.createClass({
 			}
 			self.setState(newState);
 
-			if (callback) callback({});
+			if (callback) callback.call(self, {});
 		});
 	},
 
@@ -32709,13 +32800,21 @@ var Select = React.createClass({
 				if (this.props.filterOption) return this.props.filterOption.call(this, op, filterValue);
 				var valueTest = String(op.value),
 				    labelTest = String(op.label);
-				return !filterValue || this.props.matchPos === 'start' ? this.props.matchProp !== 'label' && valueTest.toLowerCase().substr(0, filterValue.length) === filterValue || this.props.matchProp !== 'value' && labelTest.toLowerCase().substr(0, filterValue.length) === filterValue : this.props.matchProp !== 'label' && valueTest.toLowerCase().indexOf(filterValue.toLowerCase()) >= 0 || this.props.matchProp !== 'value' && labelTest.toLowerCase().indexOf(filterValue.toLowerCase()) >= 0;
+				if (this.props.ignoreCase) {
+					valueTest = valueTest.toLowerCase();
+					labelTest = labelTest.toLowerCase();
+					filterValue = filterValue.toLowerCase();
+				}
+				return !filterValue || this.props.matchPos === 'start' ? this.props.matchProp !== 'label' && valueTest.substr(0, filterValue.length) === filterValue || this.props.matchProp !== 'value' && labelTest.substr(0, filterValue.length) === filterValue : this.props.matchProp !== 'label' && valueTest.indexOf(filterValue) >= 0 || this.props.matchProp !== 'value' && labelTest.indexOf(filterValue) >= 0;
 			};
 			return (options || []).filter(filterOption, this);
 		}
 	},
 
 	selectFocusedOption: function selectFocusedOption() {
+		if (this.props.allowCreate && !this.state.focusedOption) {
+			return this.selectValue(this.state.inputValue);
+		}
 		return this.selectValue(this.state.focusedOption);
 	},
 
@@ -32787,9 +32886,21 @@ var Select = React.createClass({
 
 	buildMenu: function buildMenu() {
 		var focusedValue = this.state.focusedOption ? this.state.focusedOption.value : null;
+		var renderLabel = this.props.optionRenderer || function (op) {
+			return op.label;
+		};
 
 		if (this.state.filteredOptions.length > 0) {
 			focusedValue = focusedValue == null ? this.state.filteredOptions[0] : focusedValue;
+		}
+		// Add the current value to the filtered options in last resort
+		if (this.props.allowCreate && this.state.inputValue.trim()) {
+			var inputValue = this.state.inputValue;
+			this.state.filteredOptions.unshift({
+				value: inputValue,
+				label: inputValue,
+				create: true
+			});
 		}
 
 		var ops = Object.keys(this.state.filteredOptions).map(function (key) {
@@ -32807,20 +32918,17 @@ var Select = React.createClass({
 			var mouseEnter = this.focusOption.bind(this, op);
 			var mouseLeave = this.unfocusOption.bind(this, op);
 			var mouseDown = this.selectValue.bind(this, op);
+			var renderedLabel = renderLabel(op);
 
-			if (op.disabled) {
-				return React.createElement(
-					'div',
-					{ ref: ref, key: 'option-' + op.value, className: optionClass },
-					op.label
-				);
-			} else {
-				return React.createElement(
-					'div',
-					{ ref: ref, key: 'option-' + op.value, className: optionClass, onMouseEnter: mouseEnter, onMouseLeave: mouseLeave, onMouseDown: mouseDown, onClick: mouseDown },
-					op.label
-				);
-			}
+			return op.disabled ? React.createElement(
+				'div',
+				{ ref: ref, key: 'option-' + op.value, className: optionClass },
+				renderedLabel
+			) : React.createElement(
+				'div',
+				{ ref: ref, key: 'option-' + op.value, className: optionClass, onMouseEnter: mouseEnter, onMouseLeave: mouseLeave, onMouseDown: mouseDown, onClick: mouseDown },
+				op.create ? 'Add ' + op.label + ' ?' : renderedLabel
+			);
 		}, this);
 
 		return ops.length ? ops : React.createElement(
@@ -32831,10 +32939,8 @@ var Select = React.createClass({
 	},
 
 	handleOptionLabelClick: function handleOptionLabelClick(value, event) {
-		var handler = this.props.onOptionLabelClick;
-
-		if (handler) {
-			handler(value, event);
+		if (this.props.onOptionLabelClick) {
+			this.props.onOptionLabelClick(value, event);
 		}
 	},
 
@@ -32853,22 +32959,18 @@ var Select = React.createClass({
 
 		if (this.props.multi) {
 			this.state.values.forEach(function (val) {
-				var props = {
+				value.push(React.createElement(Value, {
 					key: val.value,
+					option: val,
+					renderer: this.props.valueRenderer,
 					optionLabelClick: !!this.props.onOptionLabelClick,
 					onOptionLabelClick: this.handleOptionLabelClick.bind(this, val),
-					onRemove: this.removeValue.bind(this, val)
-				};
-				for (var key in val) {
-					if (val.hasOwnProperty(key)) {
-						props[key] = val[key];
-					}
-				}
-				value.push(React.createElement(Value, props));
+					onRemove: this.removeValue.bind(this, val),
+					disabled: this.props.disabled }));
 			}, this);
 		}
 
-		if (this.props.disabled || !this.state.inputValue && (!this.props.multi || !value.length)) {
+		if (!this.state.inputValue && (!this.props.multi || !value.length)) {
 			value.push(React.createElement(
 				'div',
 				{ className: 'Select-placeholder', key: 'placeholder' },
@@ -32914,12 +33016,20 @@ var Select = React.createClass({
 			}
 		}
 
-		if (this.props.searchable && !this.props.disabled) {
-			input = React.createElement(Input, _extends({ value: this.state.inputValue, onChange: this.handleInputChange, minWidth: '5' }, inputProps));
-		} else {
+		if (!this.props.disabled) {
+			if (this.props.searchable) {
+				input = React.createElement(Input, _extends({ value: this.state.inputValue, onChange: this.handleInputChange, minWidth: '5' }, inputProps));
+			} else {
+				input = React.createElement(
+					'div',
+					inputProps,
+					' '
+				);
+			}
+		} else if (!this.props.multi || !this.state.values.length) {
 			input = React.createElement(
 				'div',
-				inputProps,
+				{ className: 'Select-input' },
 				' '
 			);
 		}
@@ -32933,7 +33043,8 @@ var Select = React.createClass({
 				{ className: 'Select-control', ref: 'control', onKeyDown: this.handleKeyDown, onMouseDown: this.handleMouseDown, onTouchEnd: this.handleMouseDown },
 				value,
 				input,
-				React.createElement('span', { className: 'Select-arrow' }),
+				React.createElement('span', { className: 'Select-arrow-zone', onMouseDown: this.handleMouseDownOnArrow }),
+				React.createElement('span', { className: 'Select-arrow', onMouseDown: this.handleMouseDownOnArrow }),
 				loading,
 				clear
 			),
@@ -32954,15 +33065,29 @@ var Option = React.createClass({
 	displayName: 'Value',
 
 	propTypes: {
-		label: React.PropTypes.string.isRequired
+		disabled: React.PropTypes.bool,
+		onOptionLabelClick: React.PropTypes.func,
+		onRemove: React.PropTypes.func,
+		option: React.PropTypes.object.isRequired,
+		optionLabelClick: React.PropTypes.bool,
+		renderer: React.PropTypes.func
 	},
 
 	blockEvent: function blockEvent(event) {
 		event.stopPropagation();
 	},
 
+	handleOnRemove: function handleOnRemove(event) {
+		if (!this.props.disabled) {
+			this.props.onRemove(event);
+		}
+	},
+
 	render: function render() {
-		var label = this.props.label;
+		var label = this.props.option.label;
+		if (this.props.renderer) {
+			label = this.props.renderer(this.props.option);
+		}
 
 		if (this.props.optionLabelClick) {
 			label = React.createElement(
@@ -32982,8 +33107,8 @@ var Option = React.createClass({
 				'span',
 				{ className: 'Select-item-icon',
 					onMouseDown: this.blockEvent,
-					onClick: this.props.onRemove,
-					onTouchEnd: this.props.onRemove },
+					onClick: this.handleOnRemove,
+					onTouchEnd: this.handleOnRemove },
 				'×'
 			),
 			React.createElement(
