@@ -190,7 +190,7 @@ var AppComponent = React.createClass({displayName: "AppComponent",
         var self = this;
 
         DataAPI.getTaffy(function(taffy, courses, depAverages) {
-            console.log('done');
+            console.log("Data Received");
             self.setState({allCourses : courses});
             self.setState({taffy : taffy});
             self.setState({depAverages : depAverages});
